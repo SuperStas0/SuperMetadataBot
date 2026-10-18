@@ -13,7 +13,7 @@ Telegram bot that will allow to download audio from youtube and edit its metadat
 
 ## Launching
 1. Create a new bot in telegram using [@BotFather](https://t.me/BotFather) and copy it's api key
-2. Run `user.js` and enter bot's api key and needed fields **for your account**
+2. Run `start.js` and enter bot's api key and needed fields **for your account**
 2.1. When asked to enter 2FA code you gonna receive code from Telegram
 3. Run `main.js` to start the bot
 3.1. Message `/start` to bot to start using it
