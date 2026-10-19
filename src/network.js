@@ -1,4 +1,8 @@
-class Network {
+
+import { YtDlp } from "ytdlp-nodejs";
+import dns from "node:dns";
+
+export class Network {
     static ytdlp = new YtDlp();
     static ffmpeg = this.ytdlp.ffmpegPath ? Promise.resolve() : this.ytdlp.downloadFFmpeg();
 
@@ -101,5 +105,3 @@ class Network {
         else return url;
     }
 }
-
-export {Network}

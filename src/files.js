@@ -1,5 +1,7 @@
+import fs from "node:fs";
+import { AudioData } from "../main.js";
 
-class Files {
+export class Files {
     /** @type {Record<string, number | string} */
     static config = this.load("static", "config.json");
 

@@ -1,21 +1,12 @@
-import fs from "node:fs";
+import { AudioData } from "./src/types.js"
+import { Network } from "./src/network";
 import { Telegraf, Context, Markup} from "telegraf";
 import filters from "telegraf/filters";
 import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions/index.js";
-import { YtDlp } from "ytdlp-nodejs";
 import { join } from "path";
-import dns from "node:dns";
 import ffmpeg from "fluent-ffmpeg";
 
-/**
- * @typedef {Object} AudioData
- * @property {string | null} id
- * @property {string | null} posterId
- * @property {string} title
- * @property {string} performer
- * @property {number} duration
- */
 
 class Menus {
     /**

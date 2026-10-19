@@ -1,5 +1,6 @@
 # Super Metadata
 Telegram bot that will allow to download audio from youtube and edit its metadata
+You can use [mine](https://t.me/supermetadatabot) or, even better, host your own
 
 # Quick Start
 ## Requirements
@@ -14,7 +15,7 @@ Telegram bot that will allow to download audio from youtube and edit its metadat
 ## Launching
 ### First time setup
 1. Create a new bot in telegram using [@BotFather](https://t.me/BotFather) and copy it's api key
-2. Run `start.js` and enter bot's api key and needed fields **for your account**
+2. Run `setup.js` and enter bot's api key and needed fields **for your account**
 3. When asked to enter 2FA code you gonna receive code from Telegram
 
 ### Bot start
@@ -26,6 +27,7 @@ To load audio into bot use any:
 - Use built in youtube search
 - Send youtube video link
 - Send existing audio in telegram
+
 Then you will be able to:
 - Trim
 - Change title
