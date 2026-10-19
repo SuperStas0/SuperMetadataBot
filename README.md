@@ -1,6 +1,6 @@
 # Super Metadata
 Telegram bot that will allow to download audio from youtube and edit its metadata
-You can use [mine](https://t.me/supermetadatabot) or, even better, host your own
+You can use [my bot](https://t.me/supermetadatabot) or, even better, host your own
 
 # Quick Start
 ## Requirements
