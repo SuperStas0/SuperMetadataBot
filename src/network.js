@@ -1,9 +1,16 @@
 import { YtDlp } from "ytdlp-nodejs";
 import dns from "node:dns";
+import { Files } from "./files.js";
+import { App } from "../main.js";
 
 export class Network {
     static ytdlp = new YtDlp();
-    static ffmpeg = this.ytdlp.ffmpegPath ? Promise.resolve() : this.ytdlp.downloadFFmpeg();
+
+    static ffmpegStatus = this.ytdlp.ffmpegPath ? Promise.resolve() : this.ytdlp.downloadFFmpeg();
+
+    static botFileLimit = 50 * 1024 * 1024;
+
+    static posterFileLimit = 200 * 1024;
 
     static {
         dns.setDefaultResultOrder("ipv4first");
@@ -38,7 +45,7 @@ export class Network {
     static downloadMusic(url, path, allowLarge) {
         var settings = {
             format: allowLarge ? { filter: "audioonly", type: "m4a", quality: "highest" } : "bestaudio[ext=m4a][filesize<50M]/bestaudio[filesize<50M]/worstaudio",
-            output: join(path, "audio.m4a"),
+            output: Files.path(path, "audio.m4a"),
             noPlaylist: true
         }
         return this.ytdlp.downloadAsync(url, settings);
@@ -51,7 +58,7 @@ export class Network {
     static async downloadPoster(url, path) {
         for (let posterUrl of (await (this.ytdlp.getThumbnailsAsync(url))).reverse().map(el => el.url)) {
             if (!posterUrl.includes(".jpg") || posterUrl.includes(".webp")) continue;
-            if (await this.downloadImage(posterUrl, join(path, "poster.jpg"), 200*1024)) return Promise.resolve();
+            if (await this.downloadImage(posterUrl, Files.path(path, "poster.jpg"), this.posterFileLimit)) return Promise.resolve();
         }
     }
 
@@ -61,7 +68,7 @@ export class Network {
      * @param {ExtraAudio} settings
      */
     static async uploadFile(chat, path, settings) {
-        if (Files.getFileSize(path) < 50 * 1024 * 1024) {
+        if (Files.getFileSize(path) < this.botFileLimit) {
             return await App.app.telegram.sendAudio(chat, {source: path}, settings);
         }
         else {
@@ -84,23 +91,5 @@ export class Network {
             var fileId = await filePromise;
             return await App.app.telegram.sendAudio(chat, fileId);
         }
-    }
-
-    /**
-     * @param {Context} ctx
-     * @returns {string[]}
-     */
-    static getUrls(ctx) {
-        if (!ctx.message.entities) return [];
-        return ctx.message.entities.filter(entity => entity.type == "url").map(entity => ctx.message.text.slice(entity.offset, entity.offset + entity.length));
-    }
-
-    /**
-     * @param {string} url
-     */
-    static getIdFromUrl(url) {
-        if (url.includes("watch?v=")) return url.split("?")[1].split("&")[0].replaceAll("v=","");
-        else if (url.includes("youtu.be")) return url.split("?")[0].split("/").toReversed()[0];
-        else return url;
     }
 }

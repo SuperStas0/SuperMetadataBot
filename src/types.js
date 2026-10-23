@@ -12,3 +12,7 @@
 /** @typedef {"none" | "youtube" | "telegram" | "playlist"} UserType */
 
 /** @typedef {Record<string, number | string} ConfigFile */
+
+/** @typedef {NonNullable<Parameters<import("telegraf").Telegram["sendAudio"]>[2]>} ExtraAudio */
+
+/** @typedef {import("telegraf").Context} Context */

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import join from "path";
-import ffmpeg, { setFfmpegPath } from "fluent-ffmpeg";
+import ffmpeg from "fluent-ffmpeg";
 
 export class Files {
     /** @type {ConfigFile} */
