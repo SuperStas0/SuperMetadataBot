@@ -1,7 +1,9 @@
+import { Markup } from "telegraf";
+
 export class Menus {
     /**
      * @param {[string, string, number][]} buttons
-     * @returns {Markup}
+     * @returns {Markup.Markup}
      */
     static GenerateMarkup(...buttons){
         var rows = [];
