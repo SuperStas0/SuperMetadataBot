@@ -1,0 +1,7 @@
+{
+    "compilerOptions": {
+        "moduleDetection": "legacy",
+        "lib": ["ES2023"]
+    },
+    "include": ["**/*.js"]
+}

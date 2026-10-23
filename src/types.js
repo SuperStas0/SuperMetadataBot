@@ -7,4 +7,8 @@
  * @property {number} duration
  */
 
-export {};
+/** @typedef {"none" | "loading" | "default" | "title" | "performer" | "poster" | "start" | "end"} UserStatus */
+
+/** @typedef {"none" | "youtube" | "telegram" | "playlist"} UserType */
+
+/** @typedef {Record<string, number | string} ConfigFile */

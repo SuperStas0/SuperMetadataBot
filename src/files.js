@@ -1,12 +1,12 @@
 import fs from "node:fs";
-import { AudioData } from "../main.js";
+import join from "path";
 
 export class Files {
-    /** @type {Record<string, number | string} */
-    static config = this.load("static", "config.json");
+    /** @type {ConfigFile} */
+    static config = this.load("..", "static", "config.json");
 
     /** @type {string} */
-    static helpText = this.read("static", "help.md");
+    static helpText = this.read("..", "static", "help.md");
 
     /**
      * @overload
@@ -79,7 +79,7 @@ export class Files {
     }
 
     /**
-     * @param path
+     * @param {string} path
      */
     static delete(path) {
         if (this.exists(path)) fs.rmSync(path, {force: true, recursive: true});

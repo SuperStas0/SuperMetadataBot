@@ -1,4 +1,3 @@
-import { AudioData } from "./src/types.js"
 import { Network } from "./src/network";
 import { Telegraf, Context, Markup} from "telegraf";
 import filters from "telegraf/filters";
@@ -74,7 +73,7 @@ class User {
         this.statusMessage;
         /** @type {"none" | "youtube" | "telegram" | "playlist"} */
         this.mode = "none";
-        /** @type {"none" | "loading" | "default" | "title" | "performer" | "poster" | "start" | "end"} */
+        /** @type {UserStatus} */
         this.status = "none";
         /** @type {string | string[] | null} */
         this.audio;
