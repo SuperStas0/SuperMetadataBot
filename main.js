@@ -3,8 +3,6 @@ import { Telegraf, Context, Markup} from "telegraf";
 import filters from "telegraf/filters";
 import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions/index.js";
-import { join } from "path";
-import ffmpeg from "fluent-ffmpeg";
 
 
 class Menus {

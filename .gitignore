@@ -2,6 +2,6 @@ downloads/
 deprecated.js
 deprecated removal.js
 test.js
-user.js
 node_modules/
 static/config.json
+setup.js

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import join from "path";
+import ffmpeg, { setFfmpegPath } from "fluent-ffmpeg";
 
 export class Files {
     /** @type {ConfigFile} */
@@ -17,7 +18,7 @@ export class Files {
      * @return {NonSharedBuffer}
      */
     static read(...path) {
-        return fs.readFileSync(join(...path));
+        return fs.readFileSync(this.path(...path));
     }
 
     /**
@@ -31,10 +32,8 @@ export class Files {
     /**
      * @overload
      * @param {string} path
-     * @return {any}
      * @overload
      * @param {string[]} path
-     * @return {any}
      */
     static load(...path) {
         return JSON.parse(this.read(...path));
@@ -53,7 +52,7 @@ export class Files {
      * @return {AudioData}
      */
     static loadAudio(path) {
-        return this.load(join(path, "data.json"));
+        return this.load(this.path(path, "data.json"));
     }
 
     /**
@@ -61,14 +60,17 @@ export class Files {
      * @param {AudioData} data
      */
     static saveAudio(path, data) {
-        this.save(join(path, "data.json"), data);
+        this.save(this.path(path, "data.json"), data);
     }
 
     /**
+     * @overload
      * @param {string} path
+     * @overload
+     * @param {string[]} path
      */
-    static exists(path) {
-        return fs.existsSync(path);
+    static exists(...path) {
+        return fs.existsSync(...path);
     }
 
     /**
@@ -98,6 +100,23 @@ export class Files {
      */
     static copy(inputPath, outputPath) {
         fs.copyFileSync(inputPath, outputPath);
+    }
+
+    /**
+     * @param {string} path
+     */
+    static setFfmpegPath(path) {
+        return ffmpeg.setFfmpegPath(path);
+    }
+
+    /**
+     * @overload
+     * @param {string} path
+     * @overload
+     * @param {string[]} path
+     */
+    static path(...path) {
+        return join(...path);
     }
 
     /**
