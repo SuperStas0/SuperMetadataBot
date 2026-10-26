@@ -1,3 +1,9 @@
+import { Utility } from "./utility";
+import { Files } from "./files";
+import { App }  from "../main";
+import { Network } from "./network";
+
+
 export class User {
     /**
      * @param {Context} ctx
@@ -27,7 +33,7 @@ export class User {
             start: null,
             /** @type {number | null} */
             end: null,
-            /** @type {"default" | "custom" | null} */
+            /** @type {PosterMode} */
             poster: null
         }
     }

@@ -1,7 +1,7 @@
 import { YtDlp } from "ytdlp-nodejs";
 import dns from "node:dns";
-import { Files } from "./files.js";
-import { App } from "../main.js";
+import { Files } from "./files";
+import { App } from "../main";
 
 export class Network {
     static ytdlp = new YtDlp();
