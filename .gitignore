@@ -5,3 +5,4 @@ test.js
 node_modules/
 static/config.json
 setup.js
+release/
