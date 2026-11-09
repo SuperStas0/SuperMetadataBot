@@ -1,33 +1,21 @@
 # Super Metadata
+
 Telegram bot to download audio from YouTube and edit its metadata.
 
-Public instance: [@supermetadatabot](https://t.me/supermetadatabot). Hosting your own is recommended.
-
-# Quick Start
-## Requirements
-- Telegram account
-- Node.js
-
-## Build
-1. Clone: `git clone https://github.com/SuperStas0/SuperMetadata.git`
-2. Run `build.bat` (installs dependencies)
-
-Flags are combinable, e.g. `build.bat -cr`:
-- `-c` clean: delete `node_modules` first
-- `-r` release: package the build into `release\`
-- `-h` show help
-
-## Launch
-### First-time setup
-1. Create a bot with [@BotFather](https://t.me/BotFather) and copy its API key
-2. Run `node setup.js`, enter the bot's API key and the needed fields **for your account**
-3. When asked for the 2FA code, you will receive it from Telegram
-
-### Start
-1. Run `node main.js`
-2. Send `/start` to the bot
+# Installation
+1. Install Node.js.
+2. Clone the repository: `git clone https://github.com/SuperStas0/SuperMetadata.git`
+3. Run `build.bat` (installs dependencies).
+4. Create a bot with [@BotFather](https://t.me/BotFather) and copy its API key.
+5. Run `node setup.js`, enter the bot's API key and the needed fields for your account.
+6. When asked for the 2FA code, enter the one you receive from Telegram.
 
 # Usage
+Public instance: [@supermetadatabot](https://t.me/supermetadatabot). Hosting your own is recommended.
+
+1. Run `node main.js`.
+2. Send `/start` to the bot.
+
 Load audio into the bot by any of:
 - Built-in YouTube search
 - YouTube video link
@@ -40,5 +28,19 @@ Then you can:
 - Change poster
 - Change duration
 
+# Building
+Requirements:
+- Node.js
+
+Run `build.bat [-c] [-r] [-h]`. Flags combine in any order, e.g. `build.bat -cr`.
+
+| Flag | Action |
+| --- | --- |
+| `-c` | Clean: delete previous build output first |
+| `-r` | Release: package the build into `release\Metadata.zip` (`main.js`, `src`, `static` without `config.json`, `package.json`, `package-lock.json`, `readme.md`, `LICENSE.md`) |
+| `-h` | Show this help |
+
+Build output: `node_modules`
+
 # License
-MIT
+- [MIT](LICENSE.md)
