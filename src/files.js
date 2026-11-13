@@ -1,13 +1,13 @@
 import fs from "node:fs";
-import join from "path";
+import { join } from "path";
 import ffmpeg from "fluent-ffmpeg";
 
 export class Files {
     /** @type {ConfigFile} */
-    static config = this.load("..", "static", "config.json");
+    static config = this.load("static", "config.json");
 
     /** @type {string} */
-    static helpText = this.read("..", "static", "help.md");
+    static helpText = this.read("static", "help.md");
 
     /**
      * @overload

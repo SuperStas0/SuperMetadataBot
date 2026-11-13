@@ -1,7 +1,8 @@
-import { Utility } from "./utility";
-import { Files } from "./files";
-import { App }  from "../main";
-import { Network } from "./network";
+import { App }  from "../main.js";
+import { Utility } from "./utility.js";
+import { Files } from "./files.js";
+import { Menus } from "./menus.js";
+import { Network } from "./network.js";
 
 
 export class User {

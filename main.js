@@ -1,4 +1,7 @@
-import { Network } from "./src/network";
+import { Network } from "./src/network.js";
+import { Files } from "./src/files.js";
+import { User } from "./src/user.js";
+import { Utility } from "./src/utility.js";
 import { Telegraf, Markup} from "telegraf";
 import filters from "telegraf/filters";
 import { TelegramClient, Api } from "telegram";
@@ -14,7 +17,7 @@ export class App {
 
     static largeFiles = {};
 
-    static {
+    static async start() {
         await Network.ffmpegStatus;
         ffmpeg.setFfmpegPath(Network.ytdlp.ffmpegPath);
 
@@ -241,5 +244,9 @@ export class App {
             console.log("\n\nStarted!\n");
             this.app.telegram.sendMessage(Files.config.admin, "Started", {disable_notification: true});
         });
+    }
+
+    static {
+        this.start();
     }
 }

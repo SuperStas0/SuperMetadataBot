@@ -1,7 +1,8 @@
+import { App } from "../main.js";
+import { Files } from "./files.js";
 import { YtDlp } from "ytdlp-nodejs";
 import dns from "node:dns";
-import { Files } from "./files";
-import { App } from "../main";
+import { Api } from "telegram";
 
 export class Network {
     static ytdlp = new YtDlp();
