@@ -242,7 +242,7 @@ export class App {
                 user.setPoster(fileId);
                 user.sendMenu("poster");
                 var fileLink = await this.app.telegram.getFileLink(fileId);
-                Network.downloadImage(fileLink, Files.path(user.getUserPath(), "poster.jpg"));
+                Network.downloadImage(fileLink, user.getPosterPath());
             }
         })
 

@@ -40,5 +40,8 @@ export class AudioSettings {
 
         /** @type {PosterMode} */
         this.poster = null;
+
+        /** @type {string | null} */
+        this.posterId = null;
     }
 }

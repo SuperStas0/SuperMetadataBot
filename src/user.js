@@ -22,8 +22,6 @@ export class User {
         this.audio;
         /** @type {number | null} */
         this.playlistId;
-        /** @type {string | null} */
-        this.posterId;
         /** @type {number | null} */
         this.menu;
         /** @type {AudioSettings} */
@@ -97,12 +95,13 @@ export class User {
             if (settings.start || settings.end) await Files.cut(Files.path(sourcePath, "audio.m4a"), audioPath, settings.start, duration);
             else Files.copy(Files.path(sourcePath, "audio.m4a"), audioPath);
 
-            await Network.uploadFile(this.id, audioPath, {title: title, performer: settings.performer, duration: duration, thumbnail: settings.poster && {source: Files.path(settings.poster == "default" ? sourcePath : path, "poster.jpg")}});
+            await Network.uploadFile(this.id, audioPath, {title: title, performer: settings.performer, duration: duration, thumbnail: settings.poster && {source: settings.poster == "default" ? Files.path(sourcePath, "poster.jpg") : this.getPosterPath()}});
         }
         catch (error) {
             console.log(error);
             App.app.telegram.sendMessage(this.id, `Failed to send: ${title}`).catch(() => {});
         }
+        Files.delete(audioPath);
 
         this.status = "default";
         this.clearStatus();
@@ -170,7 +169,7 @@ export class User {
         else if (mode == "poster") {
             if (settings.poster) {
                 App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
-                var poster = this.posterId;
+                var poster = settings.posterId;
                 var data;
                 if (settings.poster == "default") {
                     data = Files.loadAudio(this.getSourcePath());
@@ -211,7 +210,7 @@ export class User {
         else if (mode == "default") settings.poster = "default";
         else {
             settings.poster = "custom";
-            this.posterId = mode;
+            settings.posterId = mode;
         }
 
     }
@@ -241,6 +240,10 @@ export class User {
 
     getUserPath() {
         return Files.path("downloads", "users", this.id.toString());
+    }
+
+    getPosterPath() {
+        return Files.path(this.getUserPath(), this.mode == "playlist" ? `poster${this.playlistId}.jpg` : "poster.jpg");
     }
 
     getInfo() {
