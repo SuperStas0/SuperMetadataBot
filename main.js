@@ -22,7 +22,7 @@ export class App {
         process.on("unhandledRejection", error => console.log(error));
         this.app.catch(error => console.log(error));
 
-        await Network.ffmpegStatus;
+        if (!Files.exists(Network.ytdlp.ffmpegPath)) throw new Error("ffmpeg binary not found, run npm install");
         Files.setFfmpegPath(Network.ytdlp.ffmpegPath);
 
         this.app.start(async ctx => {

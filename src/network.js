@@ -1,17 +1,18 @@
 import { App } from "../main.js";
 import { Files } from "./files.js";
 import { YtDlp } from "ytdlp-nodejs";
+import ffmpegStatic from "ffmpeg-static";
 import dns from "node:dns";
 import { Api } from "telegram";
 
 export class Network {
-    static ytdlp = new YtDlp();
-
-    static ffmpegStatus = this.ytdlp.ffmpegPath ? Promise.resolve() : this.ytdlp.downloadFFmpeg();
+    static ytdlp = new YtDlp({ffmpegPath: ffmpegStatic});
 
     static botFileLimit = 50 * 1024 * 1024;
 
     static posterFileLimit = 200 * 1024;
+
+    static largeQueue = Promise.resolve();
 
     static {
         dns.setDefaultResultOrder("ipv4first");
@@ -73,13 +74,28 @@ export class Network {
             return await App.app.telegram.sendAudio(chat, {source: path}, settings);
         }
         else {
-            var hash = Math.random().toString();
+            var upload = this.largeQueue.then(() => this.uploadLarge(chat, path, settings));
+            this.largeQueue = upload.catch(() => {});
+            return await upload;
+        }
+    }
 
-            if (settings?.thumbnail) settings.thumbnail = settings.thumbnail.source;
+    /**
+     * @param {number} chat
+     * @param {string} path
+     * @param {ExtraAudio} settings
+     */
+    static async uploadLarge(chat, path, settings) {
+        var hash = Math.random().toString();
 
-            var resolveFn;
-            var filePromise = new Promise(resolve => { resolveFn = resolve; });
-            App.largeFiles[hash] = resolveFn;
+        if (settings?.thumbnail) settings.thumbnail = settings.thumbnail.source;
+
+        var resolveFn;
+        var filePromise = new Promise(resolve => { resolveFn = resolve; });
+        var timer;
+        App.largeFiles[hash] = resolveFn;
+
+        try {
             var msg = (await App.data[chat].statusMessage).text;
 
             await App.userClient.connect();
@@ -89,8 +105,12 @@ export class Network {
             finally {
                 await App.userClient.disconnect();
             }
-            var fileId = await filePromise;
-            return await App.app.telegram.sendAudio(chat, fileId);
+            var fileId = await Promise.race([filePromise, new Promise((resolve, reject) => { timer = setTimeout(() => reject(new Error("Large file was not received by the bot, check that the user client account is the admin")), 60 * 1000); })]);
         }
+        finally {
+            clearTimeout(timer);
+            delete App.largeFiles[hash];
+        }
+        return await App.app.telegram.sendAudio(chat, fileId);
     }
 }
