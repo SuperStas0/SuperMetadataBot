@@ -7,6 +7,8 @@ import { Network } from "./network.js";
 
 
 export class User {
+    static textLimit = 256;
+
     /**
      * @param {Context} ctx
      */
@@ -43,27 +45,34 @@ export class User {
         var url = this.mode == "playlist" ? this.audio[this.playlistId] : this.audio;
         url = `https://www.youtube.com/watch?v=${Utility.getIdFromUrl(url)}`;
         var path = this.getSourcePath();
-        var info, audio, poster;
 
         this.updateStatus(`Fetching: ${url}`);
 
         try {
-            Files.createFolder(path);
-            if (!Files.exists(Files.path(path, "data.json"))) {
-                info = Network.fetchInfo(url).then(metadata => Files.saveAudio(path, {id: null, title: metadata.title, performer: metadata.channel, duration: metadata.duration || 0}));
-            }
-            if (!Files.exists(Files.path(path, "audio.m4a"))) {
-                this.updateStatus(`Downloading: ${url}`);
-                audio = Network.downloadMusic(url, path, true).then(() => this.updateStatus(`Fetching: ${url}`));
-            }
-            if (!Files.exists(Files.path(path, "poster.jpg"))) poster = Network.downloadPoster(url, path);
+            await Utility.lock(path, async () => {
+                var audio, poster;
 
-            await Promise.all([info, audio, poster]);
+                Files.createFolder(path);
+                if (!Files.exists(Files.path(path, "data.json"))) {
+                    var metadata = await Network.fetchInfo(url);
+                    if (metadata.is_live) throw new Error("Live streams are not supported");
+                    if (metadata.duration > Network.maxDuration) throw new Error("Video is too long");
+                    Files.saveAudio(path, {id: null, title: metadata.title, performer: metadata.channel, duration: metadata.duration || 0});
+                }
+                if (!Files.exists(Files.path(path, "audio.m4a"))) {
+                    this.updateStatus(`Downloading: ${url}`);
+                    audio = Network.downloadMusic(url, path, true).then(() => this.updateStatus(`Fetching: ${url}`));
+                }
+                if (!Files.exists(Files.path(path, "poster.jpg"))) poster = Network.downloadPoster(url, path);
 
-            this.status = "default";
+                await Promise.all([audio, poster]);
+            });
+            Files.touch(Files.path(path, "audio.m4a"));
+
             this.getSettings().performer = Files.loadAudio(path).performer;
             this.clearStatus();
             await this.sendSource();
+            this.status = "default";
         }
         catch (error) {
             console.log(error);
@@ -110,23 +119,42 @@ export class User {
     }
 
     async sendSource() {
-        if (this.status != "default") return;
-
         var path = this.getSourcePath();
         var data = Files.loadAudio(path);
 
-        if (data.id) await App.app.telegram.sendAudio(this.id, data.id);
-        else {
-            this.updateStatus(`Uploading: ${data.title}`);
-            var msg = await Network.uploadFile(this.id, Files.path(path, "audio.m4a"), {title: data.title, performer: data.performer, duration: data.duration, thumbnail: {source: Files.path(path, "poster.jpg")}});
-            data.id = msg.audio.file_id;
-            Files.saveAudio(path, data);
-            this.clearStatus();
+        if (data.id) {
+            try {
+                await App.app.telegram.sendAudio(this.id, data.id);
+                return;
+            }
+            catch (error) {
+                console.log(error);
+            }
         }
+        this.updateStatus(`Uploading: ${data.title}`);
+        var msg = await Network.uploadFile(this.id, Files.path(path, "audio.m4a"), {title: data.title, performer: data.performer, duration: data.duration, thumbnail: {source: Files.path(path, "poster.jpg")}});
+        data.id = msg.audio.file_id;
+        Files.saveAudio(path, data);
+        this.clearStatus();
+    }
+
+    async parsePlaylist() {
+        this.playlistId = 0;
+        while (this.playlistId < this.audio.length) {
+            this.setPoster("default");
+            if (await this.parseLink()) this.playlistId++;
+            else {
+                this.audio.splice(this.playlistId, 1);
+                this.playlistSettings.splice(this.playlistId, 1);
+            }
+        }
+        this.status = this.audio.length ? "default" : "none";
+        this.playlistId = 0;
+        await this.sendMenu("new");
     }
 
     async sendPlaylist() {
-        if (this.mode != "playlist") return;
+        if (this.mode != "playlist" || this.status != "default") return;
         var last = this.playlistId;
         this.playlistId = 0;
         for (var _ of this.audio) {
@@ -144,6 +172,7 @@ export class User {
         if (this.status == "loading" || this.status == "none") return;
         if (!mode) mode = "new";
 
+        this.clearStatus();
         var settings = this.getSettings();
         var menuText = this.getMenuText(mode).replaceAll(".", "\\.").replaceAll("-", "\\-");
         this.status = mode;
@@ -213,6 +242,17 @@ export class User {
             settings.posterId = mode;
         }
 
+    }
+
+    /**
+     * @param {string} fileId
+     */
+    async setCustomPoster(fileId) {
+        var fileLink = await App.app.telegram.getFileLink(fileId).catch(() => null);
+        if (!fileLink || !await Network.downloadImage(fileLink, this.getPosterPath()).catch(() => false)) return this.updateStatus("Failed to download poster");
+        this.clearStatus();
+        this.setPoster(fileId);
+        this.sendMenu("poster");
     }
 
     isAdmin() {

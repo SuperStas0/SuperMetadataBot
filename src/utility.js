@@ -1,4 +1,7 @@
 export class Utility {
+    /** @type {Record<string, Promise<void>>} */
+    static locks = {};
+
     /**
      * @param {number} duration
      * @param {number} start
@@ -44,6 +47,31 @@ export class Utility {
         if (host == "youtu.be") id = parsed.pathname.split("/")[1];
         else if (host == "youtube.com") id = parsed.pathname == "/watch" ? parsed.searchParams.get("v") : parsed.pathname.match(/^\/(?:shorts|live|embed)\/([^/]+)/)?.[1];
         return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+    }
+
+    /**
+     * @param {string} text
+     * @returns {number | null}
+     */
+    static parseTimecode(text) {
+        text = text.trim();
+        if (!/^\d+(:[0-5]?\d){0,2}$/.test(text)) return null;
+        return text.split(":").reduce((total, part) => total * 60 + Number(part), 0);
+    }
+
+    /**
+     * @param {string} key
+     * @param {() => Promise<void>} task
+     */
+    static async lock(key, task) {
+        var current = (this.locks[key] ?? Promise.resolve()).catch(() => {}).then(task);
+        this.locks[key] = current;
+        try {
+            await current;
+        }
+        finally {
+            if (this.locks[key] == current) delete this.locks[key];
+        }
     }
 
     /**

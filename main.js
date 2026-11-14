@@ -18,12 +18,26 @@ export class App {
 
     static largeFiles = {};
 
+    static clean() {
+        try {
+            if (Object.values(this.data).some(user => user.status == "loading")) return;
+            Files.cleanCache(7 * 24 * 60 * 60 * 1000);
+        }
+        catch (error) {
+            console.log(error);
+        }
+    }
+
     static async start() {
         process.on("unhandledRejection", error => console.log(error));
         this.app.catch(error => console.log(error));
 
         if (!Files.exists(Network.ytdlp.ffmpegPath)) throw new Error("ffmpeg binary not found, run npm install");
         Files.setFfmpegPath(Network.ytdlp.ffmpegPath);
+
+        Files.cleanTemp();
+        this.clean();
+        setInterval(() => this.clean(), 24 * 60 * 60 * 1000);
 
         this.app.start(async ctx => {
             if (ctx.chat.type != "private") return ctx.reply("Sorry, bot only works in DMs");
@@ -111,7 +125,6 @@ export class App {
         this.app.action("title", async ctx => {
             ctx.answerCbQuery().catch(() => {});;
             var user = User.getUser(ctx);
-            user.status = "title";
             user.sendMenu("title");
         })
 
@@ -131,12 +144,12 @@ export class App {
             var user = User.getUser(ctx);
             if (!user.isAdmin()) return ctx.answerCbQuery("Only admin can delete audio from server", {show_alert: true});
             ctx.answerCbQuery().catch(() => {});;
+            if (user.status != "default") return;
             ctx.deleteMessage(user.menu).catch(() => {});
             user.menu = null;
             user.status = "none";
             Files.delete(user.getSourcePath());
-            await user.parseLink();
-            user.sendMenu("new")
+            user.parseLink().then(() => user.sendMenu("new"));
         })
 
         this.app.action("start", async ctx => {
@@ -178,40 +191,29 @@ export class App {
                 else {
                     // Batch
                     user.mode = "playlist";
-                    user.playlistId = 0;
                     user.audio = urls;
                     user.playlistSettings = urls.map(() => new AudioSettings());
-                    while (user.playlistId < user.audio.length) {
-                        user.setPoster("default");
-                        if (await user.parseLink()) user.playlistId++;
-                        else {
-                            user.audio.splice(user.playlistId, 1);
-                            user.playlistSettings.splice(user.playlistId, 1);
-                        }
-                    }
-                    user.status = user.audio.length ? "default" : "none";
-                    user.playlistId = 0;
-                    user.sendMenu("new")
-                    return;
+                    user.parsePlaylist();
                 }
             }
             else if (user.status == "loading") {
                 user.updateStatus("Please wait for previous request to finish");
             }
             else if (user.status == "performer") {
+                if (ctx.message.text.length > User.textLimit) return user.updateStatus("Performer is too long");
                 user.getSettings().performer = ctx.message.text;
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
                 user.sendMenu("default");
             }
             else if (user.status == "title") {
+                if (ctx.message.text.length > User.textLimit) return user.updateStatus("Title is too long");
                 user.getSettings().title = ctx.message.text;
                 user.sendMenu("default");
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
             }
             else if (user.status == "start") {
-                var seconds = ctx.message.text.split(":").reduce((total, part) => total * 60 + Number(part), 0);
-                if (Number.isNaN(seconds)) return user.updateStatus("Incorrect format");
-                if (seconds < 0) return user.updateStatus("Start timecode cannot be less than 0");
+                var seconds = Utility.parseTimecode(ctx.message.text);
+                if (seconds == null) return user.updateStatus("Incorrect format");
                 if (seconds >= Files.loadAudio(user.getSourcePath()).duration) return user.updateStatus("Start timecode cannot be more than total duration");
                 if (user.settings.end && seconds >= user.settings.end) return user.updateStatus("Start timecode cannot be more than end timecode");
                 user.clearStatus();
@@ -220,11 +222,10 @@ export class App {
                 user.sendMenu("default");
             }
             else if (user.status == "end") {
-                var seconds = ctx.message.text.split(":").reduce((total, part) => total * 60 + Number(part), 0);
-                if (Number.isNaN(seconds)) return user.updateStatus("Incorrect format");
-                if (seconds < 0) return user.updateStatus("End timecode cannot be less than 0");
+                var seconds = Utility.parseTimecode(ctx.message.text);
+                if (seconds == null) return user.updateStatus("Incorrect format");
                 if (seconds >= Files.loadAudio(user.getSourcePath()).duration) return user.updateStatus("End timecode cannot be more than total duration");
-                if (user.settings.start && seconds <= user.settings.start) return user.updateStatus("End timecode cannot be less than start timecode");
+                if (seconds <= (user.settings.start ?? 0)) return user.updateStatus("End timecode must be more than start timecode");
                 user.clearStatus();
                 user.settings.end = seconds;
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
@@ -240,11 +241,7 @@ export class App {
                 var photo = ctx.message.photo.toReversed().find(photo => photo.file_size && photo.file_size < Network.posterFileLimit);
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
                 if (!photo) return user.updateStatus("Poster is too big");
-                var fileLink = await this.app.telegram.getFileLink(photo.file_id);
-                if (!await Network.downloadImage(fileLink, user.getPosterPath()).catch(() => false)) return user.updateStatus("Failed to download poster");
-                user.clearStatus();
-                user.setPoster(photo.file_id);
-                user.sendMenu("poster");
+                user.setCustomPoster(photo.file_id);
             }
         })
 

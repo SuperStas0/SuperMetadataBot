@@ -14,6 +14,8 @@ export class Network {
 
     static largeQueue = Promise.resolve();
 
+    static maxDuration = 4 * 60 * 60;
+
     static {
         dns.setDefaultResultOrder("ipv4first");
     }
@@ -24,7 +26,7 @@ export class Network {
      * @param {number} sizeLimit
      */
     static async downloadImage(url, path, sizeLimit) {
-        var response = await fetch(url);
+        var response = await fetch(url, {signal: AbortSignal.timeout(15 * 1000)});
         if (!response.ok) return;
         var buffer = Buffer.from(await response.arrayBuffer());
         if (sizeLimit && sizeLimit < buffer.length) return;
@@ -93,6 +95,7 @@ export class Network {
         var resolveFn;
         var filePromise = new Promise(resolve => { resolveFn = resolve; });
         var timer;
+        var shown = -5;
         App.largeFiles[hash] = resolveFn;
 
         try {
@@ -100,7 +103,7 @@ export class Network {
 
             await App.userClient.connect();
             try {
-                await App.userClient.sendFile(App.app.botInfo.username, {file: path, caption: hash, thumb: settings.thumbnail, progressCallback: progress => App.data[chat].updateStatus(`${msg}\n${(progress*100).toFixed(0)}%`), attributes: [new Api.DocumentAttributeAudio({duration: settings.duration, title: settings.title, performer: settings.performer})]});
+                await App.userClient.sendFile(App.app.botInfo.username, {file: path, caption: hash, thumb: settings.thumbnail, progressCallback: progress => { if (progress * 100 < shown + 5) return; shown = Math.floor(progress * 100); App.data[chat].updateStatus(`${msg}\n${shown}%`); }, attributes: [new Api.DocumentAttributeAudio({duration: settings.duration, title: settings.title, performer: settings.performer})]});
             }
             finally {
                 await App.userClient.disconnect();

@@ -76,6 +76,22 @@ export class Files {
     /**
      * @param {string} path
      */
+    static list(path) {
+        return this.exists(path) ? fs.readdirSync(path) : [];
+    }
+
+    /**
+     * @param {string} path
+     */
+    static touch(path) {
+        if (!this.exists(path)) return;
+        var now = new Date();
+        fs.utimesSync(path, now, now);
+    }
+
+    /**
+     * @param {string} path
+     */
     static createFolder(path) {
         if (!this.exists(path)) fs.mkdirSync(path, {force: true, recursive: true});
     }
@@ -117,6 +133,26 @@ export class Files {
      */
     static path(...path) {
         return join(...path);
+    }
+
+    static cleanTemp() {
+        for (var user of this.list(this.path("downloads", "users"))) {
+            for (var name of this.list(this.path("downloads", "users", user))) {
+                if (name.endsWith(".m4a")) this.delete(this.path("downloads", "users", user, name));
+            }
+        }
+    }
+
+    /**
+     * @param {number} maxAge
+     */
+    static cleanCache(maxAge) {
+        for (var id of this.list(this.path("downloads", "youtube"))) {
+            for (var name of this.list(this.path("downloads", "youtube", id))) {
+                var path = this.path("downloads", "youtube", id, name);
+                if (name.startsWith("audio.m4a") && Date.now() - fs.statSync(path).mtimeMs > maxAge) this.delete(path);
+            }
+        }
     }
 
     /**
