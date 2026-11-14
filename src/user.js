@@ -43,21 +43,21 @@ export class User {
         this.status = "loading";
 
         var url = this.mode == "playlist" ? this.audio[this.playlistId] : this.audio;
-        url = `https://www.youtube.com/watch?v=${Network.getIdFromUrl(url)}`;
+        url = `https://www.youtube.com/watch?v=${Utility.getIdFromUrl(url)}`;
         var path = this.getSourcePath();
         var info, audio, poster;
 
         this.updateStatus(`Fetching: ${url}`);
 
         Files.createFolder(path);
-        if (!Files.exists(join(path, "data.json"))) {
+        if (!Files.exists(Files.path(path, "data.json"))) {
             info = Network.fetchInfo(url).then(metadata => Files.saveAudio(path, {id: null, title: metadata.title, performer: metadata.channel, duration: metadata.duration || 0}));
         }
-        if (!Files.exists(join(path, "audio.m4a"))) {
+        if (!Files.exists(Files.path(path, "audio.m4a"))) {
             this.updateStatus(`Downloading: ${url}`);
             audio = Network.downloadMusic(url, path, true).then(() => this.updateStatus(`Fetching: ${url}`));
         }
-        if (!Files.exists(join(path, "poster.jpg"))) poster = Network.downloadPoster(url, path);
+        if (!Files.exists(Files.path(path, "poster.jpg"))) poster = Network.downloadPoster(url, path);
 
         await Promise.all([info, audio, poster]);
 
@@ -74,7 +74,7 @@ export class User {
         var data = Files.loadAudio(sourcePath);
         var title = (this.mode == "playlist" ? this.settings.title[this.playlistId] : this.settings.title) ?? data.title;
         var path = this.getUserPath();
-        var audioPath = join(path, `${title}.m4a`);
+        var audioPath = Files.path(path, `${Utility.getFileName(title)}.m4a`);
         var duration = this.mode == "playlist" ? data.duration : Utility.getDuration(data.duration, this.settings.start, this.settings.end);
 
         this.status = "loading";
@@ -82,10 +82,10 @@ export class User {
         App.app.telegram.deleteMessage(this.id, this.menu);
         this.menu = null;
 
-        if (this.mode != "playlist" && (this.settings.start || this.settings.end)) await Files.cut(join(sourcePath, "audio.m4a"), audioPath, this.settings.start, duration);
-        else Files.copy(join(sourcePath, "audio.m4a"), audioPath);
+        if (this.mode != "playlist" && (this.settings.start || this.settings.end)) await Files.cut(Files.path(sourcePath, "audio.m4a"), audioPath, this.settings.start, duration);
+        else Files.copy(Files.path(sourcePath, "audio.m4a"), audioPath);
 
-        await Network.uploadFile(this.id, audioPath, {title: title, performer: this.settings.performer, duration: duration, thumbnail: this.settings.poster && {source: join(this.settings.poster == "default" ? sourcePath : path, "poster.jpg")}});
+        await Network.uploadFile(this.id, audioPath, {title: title, performer: this.settings.performer, duration: duration, thumbnail: this.settings.poster && {source: Files.path(this.settings.poster == "default" ? sourcePath : path, "poster.jpg")}});
 
         this.status = "default";
         this.clearStatus();
@@ -102,7 +102,7 @@ export class User {
         if (data.id) await App.app.telegram.sendAudio(this.id, data.id);
         else {
             this.updateStatus(`Uploading: ${data.title}`);
-            var msg = await Network.uploadFile(this.id, join(path, "audio.m4a"), {title: data.title, performer: data.performer, duration: data.duration, thumbnail: {source: join(path, "poster.jpg")}});
+            var msg = await Network.uploadFile(this.id, Files.path(path, "audio.m4a"), {title: data.title, performer: data.performer, duration: data.duration, thumbnail: {source: Files.path(path, "poster.jpg")}});
             data.id = msg.audio.file_id;
             Files.saveAudio(path, data);
             this.clearStatus();
@@ -154,7 +154,7 @@ export class User {
                 var data;
                 if (this.settings.poster == "default") {
                     data = Files.loadAudio(this.getSourcePath());
-                    poster = data.posterId ?? {source: join(this.getSourcePath(), "poster.jpg")};
+                    poster = data.posterId ?? {source: Files.path(this.getSourcePath(), "poster.jpg")};
                 }
                 var msg = await App.app.telegram.sendPhoto(this.id, poster, {...(this.settings.poster == "default" ? Menus.RemoveOnly : Menus.DefaultNRemove), caption: menuText});
                 this.menu = msg.message_id;
@@ -215,11 +215,11 @@ export class User {
 
     getSourcePath() {
         if (!this.audio) return;
-        return join("downloads", this.mode == "playlist" ? "youtube" : this.mode, this.mode == "telegram" ? this.audio : Network.getIdFromUrl(this.mode == "playlist" ? this.audio[this.playlistId] : this.audio));
+        return Files.path("downloads", this.mode == "playlist" ? "youtube" : this.mode, this.mode == "telegram" ? this.audio : Utility.getIdFromUrl(this.mode == "playlist" ? this.audio[this.playlistId] : this.audio));
     }
 
     getUserPath() {
-        return join("downloads", "users", this.id.toString());
+        return Files.path("downloads", "users", this.id.toString());
     }
 
     getInfo() {

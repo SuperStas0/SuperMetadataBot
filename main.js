@@ -19,7 +19,7 @@ export class App {
 
     static async start() {
         await Network.ffmpegStatus;
-        ffmpeg.setFfmpegPath(Network.ytdlp.ffmpegPath);
+        Files.setFfmpegPath(Network.ytdlp.ffmpegPath);
 
         this.app.start(async ctx => {
             if (ctx.chat.type != "private") return ctx.reply("Sorry, bot only works in DMs");
@@ -148,7 +148,7 @@ export class App {
             var user = User.getUser(ctx);
 
             if (user.status == "none" || user.status == "default") {
-                var urls = Network.getUrls(ctx);
+                var urls = Utility.getUrls(ctx);
                 if (urls.length == 0) {
                     // Youtube search
                     return;
@@ -224,7 +224,7 @@ export class App {
                 user.setPoster(fileId);
                 user.sendMenu("poster");
                 var fileLink = await this.app.telegram.getFileLink(fileId);
-                Network.downloadImage(fileLink, join(user.getUserPath(), "poster.jpg"));
+                Network.downloadImage(fileLink, Files.path(user.getUserPath(), "poster.jpg"));
             }
         })
 

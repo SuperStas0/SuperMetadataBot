@@ -12,13 +12,13 @@ export class Files {
     /**
      * @overload
      * @param {string} path
-     * @return {NonSharedBuffer}
+     * @return {string}
      * @overload
      * @param {string[]} path
-     * @return {NonSharedBuffer}
+     * @return {string}
      */
     static read(...path) {
-        return fs.readFileSync(this.path(...path));
+        return fs.readFileSync(this.path(...path), "utf8");
     }
 
     /**
