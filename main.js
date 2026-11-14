@@ -237,12 +237,14 @@ export class App {
             var user = User.getUser(ctx);
 
             if (user.status == "default" || user.status == "poster") {
-                var fileId = ctx.message.photo.toReversed().find(photo => photo.file_size && photo.file_size < 200 * 1024).file_id;
+                var photo = ctx.message.photo.toReversed().find(photo => photo.file_size && photo.file_size < Network.posterFileLimit);
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
-                user.setPoster(fileId);
+                if (!photo) return user.updateStatus("Poster is too big");
+                var fileLink = await this.app.telegram.getFileLink(photo.file_id);
+                if (!await Network.downloadImage(fileLink, user.getPosterPath()).catch(() => false)) return user.updateStatus("Failed to download poster");
+                user.clearStatus();
+                user.setPoster(photo.file_id);
                 user.sendMenu("poster");
-                var fileLink = await this.app.telegram.getFileLink(fileId);
-                Network.downloadImage(fileLink, user.getPosterPath());
             }
         })
 

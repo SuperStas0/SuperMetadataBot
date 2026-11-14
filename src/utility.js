@@ -33,9 +33,16 @@ export class Utility {
      * @returns {string | null}
      */
     static getIdFromUrl(url) {
+        try {
+            var parsed = new URL(url.includes("://") ? url : `https://${url}`);
+        }
+        catch {
+            return null;
+        }
+        var host = parsed.hostname.replace(/^(www|m|music)\./, "");
         var id = null;
-        if (url.includes("watch?v=")) id = url.split("?")[1].split("&")[0].replaceAll("v=","");
-        else if (url.includes("youtu.be")) id = url.split("?")[0].split("/").toReversed()[0];
+        if (host == "youtu.be") id = parsed.pathname.split("/")[1];
+        else if (host == "youtube.com") id = parsed.pathname == "/watch" ? parsed.searchParams.get("v") : parsed.pathname.match(/^\/(?:shorts|live|embed)\/([^/]+)/)?.[1];
         return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
     }
 
@@ -50,7 +57,8 @@ export class Utility {
      * @param {string} name
      */
     static getFileName(name) {
-        var cleaned = name.replace(/[\\/:*?"<>|\x00-\x1f]/g, "").replace(/[. ]+$/, "");
+        var cleaned = name.replace(/[\\/:*?"<>|\x00-\x1f]/g, "").slice(0, 100).replace(/[. ]+$/, "");
+        if (/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(cleaned)) cleaned = `_${cleaned}`;
         return cleaned || "audio";
     }
 }
