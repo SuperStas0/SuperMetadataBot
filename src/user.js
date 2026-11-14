@@ -36,6 +36,9 @@ export class User {
         return this.mode == "playlist" ? this.playlistSettings[this.playlistId] : this.settings;
     }
 
+    /**
+     * @returns {Promise<boolean>}
+     */
     async parseLink() {
         this.status = "loading";
 
@@ -46,22 +49,32 @@ export class User {
 
         this.updateStatus(`Fetching: ${url}`);
 
-        Files.createFolder(path);
-        if (!Files.exists(Files.path(path, "data.json"))) {
-            info = Network.fetchInfo(url).then(metadata => Files.saveAudio(path, {id: null, title: metadata.title, performer: metadata.channel, duration: metadata.duration || 0}));
-        }
-        if (!Files.exists(Files.path(path, "audio.m4a"))) {
-            this.updateStatus(`Downloading: ${url}`);
-            audio = Network.downloadMusic(url, path, true).then(() => this.updateStatus(`Fetching: ${url}`));
-        }
-        if (!Files.exists(Files.path(path, "poster.jpg"))) poster = Network.downloadPoster(url, path);
+        try {
+            Files.createFolder(path);
+            if (!Files.exists(Files.path(path, "data.json"))) {
+                info = Network.fetchInfo(url).then(metadata => Files.saveAudio(path, {id: null, title: metadata.title, performer: metadata.channel, duration: metadata.duration || 0}));
+            }
+            if (!Files.exists(Files.path(path, "audio.m4a"))) {
+                this.updateStatus(`Downloading: ${url}`);
+                audio = Network.downloadMusic(url, path, true).then(() => this.updateStatus(`Fetching: ${url}`));
+            }
+            if (!Files.exists(Files.path(path, "poster.jpg"))) poster = Network.downloadPoster(url, path);
 
-        await Promise.all([info, audio, poster]);
+            await Promise.all([info, audio, poster]);
 
-        this.status = "default";
-        this.getSettings().performer = Files.loadAudio(path).performer;
-        this.clearStatus();
-        await this.sendSource();
+            this.status = "default";
+            this.getSettings().performer = Files.loadAudio(path).performer;
+            this.clearStatus();
+            await this.sendSource();
+        }
+        catch (error) {
+            console.log(error);
+            this.clearStatus();
+            this.status = "none";
+            App.app.telegram.sendMessage(this.id, `Failed to load: ${url}`).catch(() => {});
+            return false;
+        }
+        return true;
     }
 
     async send() {
@@ -77,13 +90,19 @@ export class User {
 
         this.status = "loading";
         this.updateStatus(`Uploading: ${title}`);
-        if (this.menu) App.app.telegram.deleteMessage(this.id, this.menu);
+        if (this.menu) App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
         this.menu = null;
 
-        if (settings.start || settings.end) await Files.cut(Files.path(sourcePath, "audio.m4a"), audioPath, settings.start, duration);
-        else Files.copy(Files.path(sourcePath, "audio.m4a"), audioPath);
+        try {
+            if (settings.start || settings.end) await Files.cut(Files.path(sourcePath, "audio.m4a"), audioPath, settings.start, duration);
+            else Files.copy(Files.path(sourcePath, "audio.m4a"), audioPath);
 
-        await Network.uploadFile(this.id, audioPath, {title: title, performer: settings.performer, duration: duration, thumbnail: settings.poster && {source: Files.path(settings.poster == "default" ? sourcePath : path, "poster.jpg")}});
+            await Network.uploadFile(this.id, audioPath, {title: title, performer: settings.performer, duration: duration, thumbnail: settings.poster && {source: Files.path(settings.poster == "default" ? sourcePath : path, "poster.jpg")}});
+        }
+        catch (error) {
+            console.log(error);
+            App.app.telegram.sendMessage(this.id, `Failed to send: ${title}`).catch(() => {});
+        }
 
         this.status = "default";
         this.clearStatus();
@@ -131,7 +150,7 @@ export class User {
         this.status = mode;
 
         if (mode == "new") {
-            if (this.menu) App.app.telegram.deleteMessage(this.id, this.menu);
+            if (this.menu) App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
             this.status = "default";
             var msg = await App.app.telegram.sendMessage(this.id, menuText, this.mode == "playlist" ? Menus.Playlist : Menus.Main);
             this.menu = msg.message_id;
@@ -142,7 +161,7 @@ export class User {
             }
             catch (error) {
                 if (!error.response?.description?.includes("message is not modified")) {
-                    console.log(error.response.description);
+                    console.log(error);
                 }
             }
         }
@@ -150,7 +169,7 @@ export class User {
         else if (mode == "performer") App.app.telegram.editMessageText(this.id, this.menu, null, menuText, settings.performer ? (settings.performer == Files.loadAudio(this.getSourcePath()).performer ? Menus.RemoveOnly : Menus.DefaultNRemove) : Menus.DefaultOnly);
         else if (mode == "poster") {
             if (settings.poster) {
-                App.app.telegram.deleteMessage(this.id, this.menu);
+                App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
                 var poster = this.posterId;
                 var data;
                 if (settings.poster == "default") {
@@ -169,7 +188,7 @@ export class User {
                     await App.app.telegram.editMessageText(this.id, this.menu, null, menuText, Menus.DefaultOnly);
                 }
                 catch (error) {
-                    App.app.telegram.deleteMessage(this.id, this.menu);
+                    App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
                     var msg = await App.app.telegram.sendMessage(this.id, menuText, Menus.DefaultOnly);
                     this.menu = msg.message_id;
                 }
@@ -180,7 +199,7 @@ export class User {
 
     removeMenu() {
         if (!this.menu) return;
-        App.app.telegram.deleteMessage(this.id, this.menu);
+        App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
     }
 
     /**
@@ -211,7 +230,7 @@ export class User {
 
     clearStatus() {
         if (!this.statusMessage) return;
-        this.statusMessage.then(msg => App.app.telegram.deleteMessage(this.id, msg.message_id));
+        this.statusMessage.then(msg => App.app.telegram.deleteMessage(this.id, msg.message_id)).catch(() => {});
         this.statusMessage = null;
     }
 

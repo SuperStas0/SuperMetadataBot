@@ -19,6 +19,9 @@ export class App {
     static largeFiles = {};
 
     static async start() {
+        process.on("unhandledRejection", error => console.log(error));
+        this.app.catch(error => console.log(error));
+
         await Network.ffmpegStatus;
         Files.setFfmpegPath(Network.ytdlp.ffmpegPath);
 
@@ -118,7 +121,7 @@ export class App {
             var user = User.getUser(ctx);
             if (!user.isAdmin()) return ctx.answerCbQuery("Only admin can delete audio from server", {show_alert: true});
             ctx.answerCbQuery().catch(() => {});;
-            ctx.deleteMessage(user.menu);
+            ctx.deleteMessage(user.menu).catch(() => {});
             user.menu = null;
             user.status = "none";
             Files.delete(user.getSourcePath());
@@ -168,11 +171,15 @@ export class App {
                     user.playlistId = 0;
                     user.audio = urls;
                     user.playlistSettings = urls.map(() => new AudioSettings());
-                    for (var _ of urls) {
+                    while (user.playlistId < user.audio.length) {
                         user.setPoster("default");
-                        await user.parseLink();
-                        user.playlistId++;
+                        if (await user.parseLink()) user.playlistId++;
+                        else {
+                            user.audio.splice(user.playlistId, 1);
+                            user.playlistSettings.splice(user.playlistId, 1);
+                        }
                     }
+                    user.status = user.audio.length ? "default" : "none";
                     user.playlistId = 0;
                     user.sendMenu("new")
                     return;
@@ -183,13 +190,13 @@ export class App {
             }
             else if (user.status == "performer") {
                 user.getSettings().performer = ctx.message.text;
-                ctx.deleteMessage(ctx.message.message_id);
+                ctx.deleteMessage(ctx.message.message_id).catch(() => {});
                 user.sendMenu("default");
             }
             else if (user.status == "title") {
                 user.getSettings().title = ctx.message.text;
                 user.sendMenu("default");
-                ctx.deleteMessage(ctx.message.message_id);
+                ctx.deleteMessage(ctx.message.message_id).catch(() => {});
             }
             else if (user.status == "start") {
                 var seconds = ctx.message.text.split(":").reduce((total, part) => total * 60 + Number(part), 0);
@@ -199,7 +206,7 @@ export class App {
                 if (user.settings.end && seconds >= user.settings.end) return user.updateStatus("Start timecode cannot be more than end timecode");
                 user.clearStatus();
                 user.settings.start = seconds;
-                ctx.deleteMessage(ctx.message.message_id);
+                ctx.deleteMessage(ctx.message.message_id).catch(() => {});
                 user.sendMenu("default");
             }
             else if (user.status == "end") {
@@ -210,7 +217,7 @@ export class App {
                 if (user.settings.start && seconds <= user.settings.start) return user.updateStatus("End timecode cannot be less than start timecode");
                 user.clearStatus();
                 user.settings.end = seconds;
-                ctx.deleteMessage(ctx.message.message_id);
+                ctx.deleteMessage(ctx.message.message_id).catch(() => {});
                 user.sendMenu("default");
             }
         })
@@ -221,7 +228,7 @@ export class App {
 
             if (user.status == "default" || user.status == "poster") {
                 var fileId = ctx.message.photo.toReversed().find(photo => photo.file_size && photo.file_size < 200 * 1024).file_id;
-                ctx.deleteMessage(ctx.message.message_id);
+                ctx.deleteMessage(ctx.message.message_id).catch(() => {});
                 user.setPoster(fileId);
                 user.sendMenu("poster");
                 var fileLink = await this.app.telegram.getFileLink(fileId);
@@ -237,17 +244,20 @@ export class App {
             if (user.isAdmin() && caption && App.largeFiles[caption]) {
                 App.largeFiles[caption](ctx.message.audio.file_id);
                 delete App.largeFiles[caption];
-                ctx.deleteMessage(ctx.message.message_id);
+                ctx.deleteMessage(ctx.message.message_id).catch(() => {});
             }
         });
 
-        this.app.launch({dropPendingUpdates: true}, () => {
+        await this.app.launch({dropPendingUpdates: true}, () => {
             console.log("\n\nStarted!\n");
             this.app.telegram.sendMessage(Files.config.admin, "Started", {disable_notification: true});
         });
     }
 
     static {
-        this.start();
+        this.start().catch(error => {
+            console.log(error);
+            process.exit(1);
+        });
     }
 }
