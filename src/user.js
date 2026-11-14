@@ -249,8 +249,8 @@ export class User {
         var info = {};
 
         /** @type {string} */
-        info.title = settings.title ?? data.title;
-        info.performer = settings.performer;
+        info.title = Utility.escapeCode(settings.title ?? data.title);
+        info.performer = Utility.escapeCode(settings.performer);
         info.duration = data.duration;
         info.poster = settings.poster;
         info.start = settings.start;

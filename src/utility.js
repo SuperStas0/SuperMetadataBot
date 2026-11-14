@@ -40,6 +40,13 @@ export class Utility {
     }
 
     /**
+     * @param {string | null} text
+     */
+    static escapeCode(text) {
+        return text?.replaceAll("\\", "\\\\").replaceAll("`", "\\`") ?? null;
+    }
+
+    /**
      * @param {string} name
      */
     static getFileName(name) {

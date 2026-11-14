@@ -70,6 +70,16 @@ export class App {
                 user.sendMenu("default");
                 return;
             }
+            if (user.status == "start") {
+                user.settings.start = null;
+                user.sendMenu("default");
+                return;
+            }
+            if (user.status == "end") {
+                user.settings.end = null;
+                user.sendMenu("default");
+                return;
+            }
 
         })
 
