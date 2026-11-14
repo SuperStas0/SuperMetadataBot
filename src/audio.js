@@ -23,3 +23,22 @@ export class AudioSource {
         this.duration = null;
     }
 }
+
+export class AudioSettings {
+    constructor () {
+        /** @type {string | null} */
+        this.title = null;
+
+        /** @type {string | null} */
+        this.performer = null;
+
+        /** @type {number | null} */
+        this.start = null;
+
+        /** @type {number | null} */
+        this.end = null;
+
+        /** @type {PosterMode} */
+        this.poster = null;
+    }
+}

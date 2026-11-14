@@ -2,6 +2,7 @@ import { Network } from "./src/network.js";
 import { Files } from "./src/files.js";
 import { User } from "./src/user.js";
 import { Utility } from "./src/utility.js";
+import { AudioSettings } from "./src/audio.js";
 import { Telegraf, Markup} from "telegraf";
 import filters from "telegraf/filters";
 import { TelegramClient, Api } from "telegram";
@@ -47,7 +48,7 @@ export class App {
                 return;
             }
             if (user.status == "performer") {
-                user.settings.performer = null;
+                user.getSettings().performer = null;
                 user.sendMenu("default");
                 return;
             }
@@ -62,7 +63,7 @@ export class App {
                 return;
             }
             if (user.status == "performer") {
-                user.settings.performer = Files.loadAudio(user.getSourcePath()).performer;
+                user.getSettings().performer = Files.loadAudio(user.getSourcePath()).performer;
                 user.sendMenu("default");
                 return;
             }
@@ -72,7 +73,7 @@ export class App {
         this.app.action("cancel", async ctx => {
             ctx.answerCbQuery().catch(() => {});;
             var user = User.getUser(ctx);
-            if (user.status == "poster" && user.settings.poster) user.sendMenu("new");
+            if (user.status == "poster" && user.getSettings().poster) user.sendMenu("new");
             else user.sendMenu("default");
         })
 
@@ -157,17 +158,18 @@ export class App {
                     // Single file
                     user.audio = urls[0]
                     user.mode = "youtube";
+                    user.settings = new AudioSettings();
                     user.setPoster("default");
                     user.parseLink().then(() => user.sendMenu("new"));
                 }
                 else {
                     // Batch
                     user.mode = "playlist";
-                    user.settings.poster = "default";
                     user.playlistId = 0;
                     user.audio = urls;
-                    user.settings.title = [];
-                    for (let _ of urls) {
+                    user.playlistSettings = urls.map(() => new AudioSettings());
+                    for (var _ of urls) {
+                        user.setPoster("default");
                         await user.parseLink();
                         user.playlistId++;
                     }
@@ -180,13 +182,12 @@ export class App {
                 user.updateStatus("Please wait for previous request to finish");
             }
             else if (user.status == "performer") {
-                user.settings.performer = ctx.message.text;
+                user.getSettings().performer = ctx.message.text;
                 ctx.deleteMessage(ctx.message.message_id);
                 user.sendMenu("default");
             }
             else if (user.status == "title") {
-                if (user.mode == "playlist") user.settings.title[user.playlistId] = ctx.message.text;
-                else user.settings.title = ctx.message.text;
+                user.getSettings().title = ctx.message.text;
                 user.sendMenu("default");
                 ctx.deleteMessage(ctx.message.message_id);
             }

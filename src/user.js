@@ -1,6 +1,7 @@
 import { App }  from "../main.js";
 import { Utility } from "./utility.js";
 import { Files } from "./files.js";
+import { AudioSettings } from "./audio.js";
 import { Menus } from "./menus.js";
 import { Network } from "./network.js";
 
@@ -25,18 +26,14 @@ export class User {
         this.posterId;
         /** @type {number | null} */
         this.menu;
-        this.settings = {
-            /** @type {string | string[] | null} */
-            title: null,
-            /** @type {string | null} */
-            performer: null,
-            /** @type {number | null} */
-            start: null,
-            /** @type {number | null} */
-            end: null,
-            /** @type {PosterMode} */
-            poster: null
-        }
+        /** @type {AudioSettings} */
+        this.settings = new AudioSettings();
+        /** @type {AudioSettings[]} */
+        this.playlistSettings = [];
+    }
+
+    getSettings() {
+        return this.mode == "playlist" ? this.playlistSettings[this.playlistId] : this.settings;
     }
 
     async parseLink() {
@@ -62,7 +59,7 @@ export class User {
         await Promise.all([info, audio, poster]);
 
         this.status = "default";
-        this.settings.performer = Files.loadAudio(path).performer;
+        this.getSettings().performer = Files.loadAudio(path).performer;
         this.clearStatus();
         await this.sendSource();
     }
@@ -72,24 +69,25 @@ export class User {
 
         var sourcePath = this.getSourcePath();
         var data = Files.loadAudio(sourcePath);
-        var title = (this.mode == "playlist" ? this.settings.title[this.playlistId] : this.settings.title) ?? data.title;
+        var settings = this.getSettings();
+        var title = settings.title ?? data.title;
         var path = this.getUserPath();
         var audioPath = Files.path(path, `${Utility.getFileName(title)}.m4a`);
-        var duration = this.mode == "playlist" ? data.duration : Utility.getDuration(data.duration, this.settings.start, this.settings.end);
+        var duration = Utility.getDuration(data.duration, settings.start, settings.end);
 
         this.status = "loading";
         this.updateStatus(`Uploading: ${title}`);
-        App.app.telegram.deleteMessage(this.id, this.menu);
+        if (this.menu) App.app.telegram.deleteMessage(this.id, this.menu);
         this.menu = null;
 
-        if (this.mode != "playlist" && (this.settings.start || this.settings.end)) await Files.cut(Files.path(sourcePath, "audio.m4a"), audioPath, this.settings.start, duration);
+        if (settings.start || settings.end) await Files.cut(Files.path(sourcePath, "audio.m4a"), audioPath, settings.start, duration);
         else Files.copy(Files.path(sourcePath, "audio.m4a"), audioPath);
 
-        await Network.uploadFile(this.id, audioPath, {title: title, performer: this.settings.performer, duration: duration, thumbnail: this.settings.poster && {source: Files.path(this.settings.poster == "default" ? sourcePath : path, "poster.jpg")}});
+        await Network.uploadFile(this.id, audioPath, {title: title, performer: settings.performer, duration: duration, thumbnail: settings.poster && {source: Files.path(settings.poster == "default" ? sourcePath : path, "poster.jpg")}});
 
         this.status = "default";
         this.clearStatus();
-        this.sendMenu();
+        await this.sendMenu();
 
     }
 
@@ -113,11 +111,12 @@ export class User {
         if (this.mode != "playlist") return;
         var last = this.playlistId;
         this.playlistId = 0;
-        for (let _ of this.settings.title) {
+        for (var _ of this.audio) {
             await this.send();
             this.playlistId += 1;
         }
         this.playlistId = last;
+        await this.sendMenu();
     }
 
     /**
@@ -127,13 +126,15 @@ export class User {
         if (this.status == "loading" || this.status == "none") return;
         if (!mode) mode = "new";
 
+        var settings = this.getSettings();
         var menuText = this.getMenuText(mode).replaceAll(".", "\\.").replaceAll("-", "\\-");
         this.status = mode;
 
         if (mode == "new") {
             if (this.menu) App.app.telegram.deleteMessage(this.id, this.menu);
             this.status = "default";
-            App.app.telegram.sendMessage(this.id, menuText, this.mode == "playlist" ? Menus.Playlist : Menus.Main).then(msg => this.menu = msg.message_id);
+            var msg = await App.app.telegram.sendMessage(this.id, menuText, this.mode == "playlist" ? Menus.Playlist : Menus.Main);
+            this.menu = msg.message_id;
         }
         else if (mode == "default") {
             try {
@@ -146,17 +147,17 @@ export class User {
             }
         }
         else if (mode == "title") App.app.telegram.editMessageText(this.id, this.menu, null, menuText, Menus.Cancel);
-        else if (mode == "performer") App.app.telegram.editMessageText(this.id, this.menu, null, menuText, this.settings.performer ? (this.settings.performer == Files.loadAudio(this.getSourcePath()).performer ? Menus.RemoveOnly : Menus.DefaultNRemove) : Menus.DefaultOnly);
+        else if (mode == "performer") App.app.telegram.editMessageText(this.id, this.menu, null, menuText, settings.performer ? (settings.performer == Files.loadAudio(this.getSourcePath()).performer ? Menus.RemoveOnly : Menus.DefaultNRemove) : Menus.DefaultOnly);
         else if (mode == "poster") {
-            if (this.settings.poster) {
+            if (settings.poster) {
                 App.app.telegram.deleteMessage(this.id, this.menu);
                 var poster = this.posterId;
                 var data;
-                if (this.settings.poster == "default") {
+                if (settings.poster == "default") {
                     data = Files.loadAudio(this.getSourcePath());
                     poster = data.posterId ?? {source: Files.path(this.getSourcePath(), "poster.jpg")};
                 }
-                var msg = await App.app.telegram.sendPhoto(this.id, poster, {...(this.settings.poster == "default" ? Menus.RemoveOnly : Menus.DefaultNRemove), caption: menuText});
+                var msg = await App.app.telegram.sendPhoto(this.id, poster, {...(settings.poster == "default" ? Menus.RemoveOnly : Menus.DefaultNRemove), caption: menuText});
                 this.menu = msg.message_id;
                 if (data && !data.posterId) {
                     data.posterId = msg.photo.toReversed()[0].file_id;
@@ -186,10 +187,11 @@ export class User {
      * @param {"default"| {} & string | null} mode
      */
     setPoster(mode) {
-        if (!mode) this.settings.poster = null;
-        else if (mode == "default") this.settings.poster = "default";
+        var settings = this.getSettings();
+        if (!mode) settings.poster = null;
+        else if (mode == "default") settings.poster = "default";
         else {
-            this.settings.poster = "custom";
+            settings.poster = "custom";
             this.posterId = mode;
         }
 
@@ -224,15 +226,16 @@ export class User {
 
     getInfo() {
         var data = Files.loadAudio(this.getSourcePath())
+        var settings = this.getSettings();
         var info = {};
 
         /** @type {string} */
-        info.title = (this.mode == "playlist" ? this.settings.title[this.playlistId] : this.settings.title) ?? data.title;
-        info.performer = this.settings.performer;
+        info.title = settings.title ?? data.title;
+        info.performer = settings.performer;
         info.duration = data.duration;
-        info.poster = this.settings.poster;
-        info.start = this.settings.start;
-        info.end = this.settings.end;
+        info.poster = settings.poster;
+        info.start = settings.start;
+        info.end = settings.end;
 
         info.text = "";
         if (this.mode == "playlist") info.text += `\`${this.playlistId+1}/${this.audio.length}\`\n`;
