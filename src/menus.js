@@ -24,7 +24,7 @@ export class Menus {
 
     static CancelWithNull = this.GenerateMarkup(["Null", "null", 0], ["Cancel", "cancel", 1]);
 
-    static Choice = this.GenerateMarkup(["1", "select", 0])
+    static Choice = this.GenerateMarkup(["1", "select", 0]);
 
     static DefaultOnly = this.GenerateMarkup(["Set default", "default", 0], ["Cancel", "cancel", 1]);
 

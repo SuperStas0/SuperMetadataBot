@@ -60,7 +60,7 @@ export class Network {
      * @param {string} path
      */
     static async downloadPoster(url, path) {
-        for (let posterUrl of (await (this.ytdlp.getThumbnailsAsync(url))).reverse().map(el => el.url)) {
+        for (var posterUrl of (await (this.ytdlp.getThumbnailsAsync(url))).reverse().map(el => el.url)) {
             if (!posterUrl.includes(".jpg") || posterUrl.includes(".webp")) continue;
             if (await this.downloadImage(posterUrl, Files.path(path, "poster.jpg"), this.posterFileLimit)) return Promise.resolve();
         }

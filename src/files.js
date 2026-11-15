@@ -23,7 +23,7 @@ export class Files {
 
     /**
      * @param {string} path
-     * @param {string} data
+     * @param {string | Buffer} data
      */
     static write(path, data) {
         fs.writeFileSync(path, data);
@@ -60,7 +60,7 @@ export class Files {
      * @param {AudioData} data
      */
     static saveAudio(path, data) {
-        this.save(this.path(path, "data.json"), data);
+        this.save(this.path(path, "data.json"), {id: data.id, posterId: data.posterId, title: data.title, performer: data.performer, duration: data.duration});
     }
 
     /**
@@ -70,7 +70,7 @@ export class Files {
      * @param {string[]} path
      */
     static exists(...path) {
-        return fs.existsSync(...path);
+        return fs.existsSync(this.path(...path));
     }
 
     /**

@@ -4,8 +4,8 @@ export class Utility {
 
     /**
      * @param {number} duration
-     * @param {number} start
-     * @param {number} end
+     * @param {number | null} start
+     * @param {number | null} end
      */
     static getDuration(duration, start, end) {
         start ??= 0;
@@ -19,7 +19,7 @@ export class Utility {
     static getDurationString(duration) {
         var mins = Math.floor(duration / 60);
         var secs = Math.floor(duration % 60);
-        return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+        return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
     }
 
     /**

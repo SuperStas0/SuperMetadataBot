@@ -3,7 +3,7 @@
 Telegram bot to download audio from YouTube and edit its metadata.
 
 # Installation
-1. Install Node.js.
+1. Install Node.js 20 or newer.
 2. Clone the repository: `git clone https://github.com/SuperStas0/SuperMetadata.git`
 3. Run `build.bat` (installs dependencies).
 4. Create a bot with [@BotFather](https://t.me/BotFather) and copy its API key.
@@ -30,7 +30,7 @@ Then you can:
 
 # Building
 Requirements:
-- Node.js
+- Node.js 20 or newer
 
 Run `build.bat [-c] [-r] [-h]`. Flags combine in any order, e.g. `build.bat -cr`.
 

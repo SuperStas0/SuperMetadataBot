@@ -1,11 +1,11 @@
-// /**
-//  * @typedef {Object} AudioData
-//  * @property {string | null} id
-//  * @property {string | null} posterId
-//  * @property {string} title
-//  * @property {string} performer
-//  * @property {number} duration
-//  */
+/**
+ * @typedef {Object} AudioData
+ * @property {string | null} id
+ * @property {string | null} posterId
+ * @property {string} title
+ * @property {string} performer
+ * @property {number} duration
+ */
 
 /** @typedef {"none" | "loading" | "default" | "title" | "performer" | "poster" | "start" | "end"} UserStatus */
 
@@ -13,7 +13,7 @@
 
 /** @typedef {"default" | "custom" | null} PosterMode */
 
-/** @typedef {Record<string, number | string} ConfigFile */
+/** @typedef {Record<string, number | string>} ConfigFile */
 
 /** @typedef {NonNullable<Parameters<import("telegraf").Telegram["sendAudio"]>[2]>} ExtraAudio */
 

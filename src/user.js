@@ -1,7 +1,7 @@
 import { App }  from "../main.js";
 import { Utility } from "./utility.js";
 import { Files } from "./files.js";
-import { AudioSettings } from "./audio.js";
+import { Audio } from "./audio.js";
 import { Menus } from "./menus.js";
 import { Network } from "./network.js";
 
@@ -20,20 +20,18 @@ export class User {
         this.mode = "none";
         /** @type {UserStatus} */
         this.status = "none";
-        /** @type {string | string[] | null} */
-        this.audio;
+        /** @type {Audio} */
+        this.audio = new Audio();
+        /** @type {Audio[]} */
+        this.playlist = [];
         /** @type {number | null} */
         this.playlistId;
         /** @type {number | null} */
         this.menu;
-        /** @type {AudioSettings} */
-        this.settings = new AudioSettings();
-        /** @type {AudioSettings[]} */
-        this.playlistSettings = [];
     }
 
-    getSettings() {
-        return this.mode == "playlist" ? this.playlistSettings[this.playlistId] : this.settings;
+    getAudio() {
+        return this.mode == "playlist" ? this.playlist[this.playlistId] : this.audio;
     }
 
     /**
@@ -42,9 +40,13 @@ export class User {
     async parseLink() {
         this.status = "loading";
 
-        var url = this.mode == "playlist" ? this.audio[this.playlistId] : this.audio;
-        url = `https://www.youtube.com/watch?v=${Utility.getIdFromUrl(url)}`;
-        var path = this.getSourcePath();
+        var audio = this.getAudio();
+        var source = audio.source;
+        var id = Utility.getIdFromUrl(source.url);
+        source.url = `https://www.youtube.com/watch?v=${id}`;
+        source.path = this.getSourcePath();
+        var url = source.url;
+        var path = source.path;
 
         this.updateStatus(`Fetching: ${url}`);
 
@@ -69,7 +71,8 @@ export class User {
             });
             Files.touch(Files.path(path, "audio.m4a"));
 
-            this.getSettings().performer = Files.loadAudio(path).performer;
+            Object.assign(source, Files.loadAudio(path));
+            audio.performer = source.performer;
             this.clearStatus();
             await this.sendSource();
             this.status = "default";
@@ -87,13 +90,12 @@ export class User {
     async send() {
         if (this.status != "default") return;
 
-        var sourcePath = this.getSourcePath();
-        var data = Files.loadAudio(sourcePath);
-        var settings = this.getSettings();
-        var title = settings.title ?? data.title;
+        var audio = this.getAudio();
+        var source = audio.source;
+        var title = audio.title ?? source.title;
         var path = this.getUserPath();
         var audioPath = Files.path(path, `${Utility.getFileName(title)}.m4a`);
-        var duration = Utility.getDuration(data.duration, settings.start, settings.end);
+        var duration = Utility.getDuration(source.duration, audio.start, audio.end);
 
         this.status = "loading";
         this.updateStatus(`Uploading: ${title}`);
@@ -101,10 +103,10 @@ export class User {
         this.menu = null;
 
         try {
-            if (settings.start || settings.end) await Files.cut(Files.path(sourcePath, "audio.m4a"), audioPath, settings.start, duration);
-            else Files.copy(Files.path(sourcePath, "audio.m4a"), audioPath);
+            if (audio.start || audio.end) await Files.cut(Files.path(source.path, "audio.m4a"), audioPath, audio.start, duration);
+            else Files.copy(Files.path(source.path, "audio.m4a"), audioPath);
 
-            await Network.uploadFile(this.id, audioPath, {title: title, performer: settings.performer, duration: duration, thumbnail: settings.poster && {source: settings.poster == "default" ? Files.path(sourcePath, "poster.jpg") : this.getPosterPath()}});
+            await Network.uploadFile(this.id, audioPath, {title: title, performer: audio.performer, duration: duration, thumbnail: audio.poster && {source: audio.poster == "default" ? Files.path(source.path, "poster.jpg") : this.getPosterPath()}});
         }
         catch (error) {
             console.log(error);
@@ -119,36 +121,32 @@ export class User {
     }
 
     async sendSource() {
-        var path = this.getSourcePath();
-        var data = Files.loadAudio(path);
+        var source = this.getAudio().source;
 
-        if (data.id) {
+        if (source.id) {
             try {
-                await App.app.telegram.sendAudio(this.id, data.id);
+                await App.app.telegram.sendAudio(this.id, source.id);
                 return;
             }
             catch (error) {
                 console.log(error);
             }
         }
-        this.updateStatus(`Uploading: ${data.title}`);
-        var msg = await Network.uploadFile(this.id, Files.path(path, "audio.m4a"), {title: data.title, performer: data.performer, duration: data.duration, thumbnail: {source: Files.path(path, "poster.jpg")}});
-        data.id = msg.audio.file_id;
-        Files.saveAudio(path, data);
+        this.updateStatus(`Uploading: ${source.title}`);
+        var msg = await Network.uploadFile(this.id, Files.path(source.path, "audio.m4a"), {title: source.title, performer: source.performer, duration: source.duration, thumbnail: {source: Files.path(source.path, "poster.jpg")}});
+        source.id = msg.audio.file_id;
+        Files.saveAudio(source.path, source);
         this.clearStatus();
     }
 
     async parsePlaylist() {
         this.playlistId = 0;
-        while (this.playlistId < this.audio.length) {
+        while (this.playlistId < this.playlist.length) {
             this.setPoster("default");
             if (await this.parseLink()) this.playlistId++;
-            else {
-                this.audio.splice(this.playlistId, 1);
-                this.playlistSettings.splice(this.playlistId, 1);
-            }
+            else this.playlist.splice(this.playlistId, 1);
         }
-        this.status = this.audio.length ? "default" : "none";
+        this.status = this.playlist.length ? "default" : "none";
         this.playlistId = 0;
         await this.sendMenu("new");
     }
@@ -157,7 +155,7 @@ export class User {
         if (this.mode != "playlist" || this.status != "default") return;
         var last = this.playlistId;
         this.playlistId = 0;
-        for (var _ of this.audio) {
+        for (var _ of this.playlist) {
             await this.send();
             this.playlistId += 1;
         }
@@ -166,14 +164,14 @@ export class User {
     }
 
     /**
-     * @param {"new" | "default" | "title" | "performer" | "poster" | "start" | "end"} mode
+     * @param {"new" | "default" | "title" | "performer" | "poster" | "start" | "end"} [mode]
      */
     async sendMenu(mode) {
         if (this.status == "loading" || this.status == "none") return;
         if (!mode) mode = "new";
 
         this.clearStatus();
-        var settings = this.getSettings();
+        var audio = this.getAudio();
         var menuText = this.getMenuText(mode).replaceAll(".", "\\.").replaceAll("-", "\\-");
         this.status = mode;
 
@@ -194,21 +192,17 @@ export class User {
             }
         }
         else if (mode == "title") App.app.telegram.editMessageText(this.id, this.menu, null, menuText, Menus.Cancel);
-        else if (mode == "performer") App.app.telegram.editMessageText(this.id, this.menu, null, menuText, settings.performer ? (settings.performer == Files.loadAudio(this.getSourcePath()).performer ? Menus.RemoveOnly : Menus.DefaultNRemove) : Menus.DefaultOnly);
+        else if (mode == "performer") App.app.telegram.editMessageText(this.id, this.menu, null, menuText, audio.performer ? (audio.performer == audio.source.performer ? Menus.RemoveOnly : Menus.DefaultNRemove) : Menus.DefaultOnly);
         else if (mode == "poster") {
-            if (settings.poster) {
+            if (audio.poster) {
                 App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
-                var poster = settings.posterId;
-                var data;
-                if (settings.poster == "default") {
-                    data = Files.loadAudio(this.getSourcePath());
-                    poster = data.posterId ?? {source: Files.path(this.getSourcePath(), "poster.jpg")};
-                }
-                var msg = await App.app.telegram.sendPhoto(this.id, poster, {...(settings.poster == "default" ? Menus.RemoveOnly : Menus.DefaultNRemove), caption: menuText});
+                var poster = audio.posterId;
+                if (audio.poster == "default") poster = audio.source.posterId ?? {source: Files.path(audio.source.path, "poster.jpg")};
+                var msg = await App.app.telegram.sendPhoto(this.id, poster, {...(audio.poster == "default" ? Menus.RemoveOnly : Menus.DefaultNRemove), caption: menuText});
                 this.menu = msg.message_id;
-                if (data && !data.posterId) {
-                    data.posterId = msg.photo.toReversed()[0].file_id;
-                    Files.saveAudio(this.getSourcePath(), data);
+                if (audio.poster == "default" && !audio.source.posterId) {
+                    audio.source.posterId = msg.photo.toReversed()[0].file_id;
+                    Files.saveAudio(audio.source.path, audio.source);
                 }
             }
             else {
@@ -225,21 +219,16 @@ export class User {
         else if (mode == "start" || mode == "end") App.app.telegram.editMessageText(this.id, this.menu, null, menuText, Menus.DefaultOnly);
     }
 
-    removeMenu() {
-        if (!this.menu) return;
-        App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
-    }
-
     /**
      * @param {"default"| {} & string | null} mode
      */
     setPoster(mode) {
-        var settings = this.getSettings();
-        if (!mode) settings.poster = null;
-        else if (mode == "default") settings.poster = "default";
+        var audio = this.getAudio();
+        if (!mode) audio.poster = null;
+        else if (mode == "default") audio.poster = "default";
         else {
-            settings.poster = "custom";
-            settings.posterId = mode;
+            audio.poster = "custom";
+            audio.posterId = mode;
         }
 
     }
@@ -253,6 +242,11 @@ export class User {
         this.clearStatus();
         this.setPoster(fileId);
         this.sendMenu("poster");
+    }
+
+    removeMenu() {
+        if (!this.menu) return;
+        App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
     }
 
     isAdmin() {
@@ -274,8 +268,9 @@ export class User {
     }
 
     getSourcePath() {
-        if (!this.audio) return;
-        return Files.path("downloads", this.mode == "playlist" ? "youtube" : this.mode, this.mode == "telegram" ? this.audio : Utility.getIdFromUrl(this.mode == "playlist" ? this.audio[this.playlistId] : this.audio));
+        var source = this.getAudio()?.source;
+        if (!source?.url) return;
+        return Files.path("downloads", this.mode == "playlist" ? "youtube" : this.mode, this.mode == "telegram" ? source.url : Utility.getIdFromUrl(source.url));
     }
 
     getUserPath() {
@@ -287,20 +282,19 @@ export class User {
     }
 
     getInfo() {
-        var data = Files.loadAudio(this.getSourcePath())
-        var settings = this.getSettings();
+        var audio = this.getAudio();
         var info = {};
 
         /** @type {string} */
-        info.title = Utility.escapeCode(settings.title ?? data.title);
-        info.performer = Utility.escapeCode(settings.performer);
-        info.duration = data.duration;
-        info.poster = settings.poster;
-        info.start = settings.start;
-        info.end = settings.end;
+        info.title = Utility.escapeCode(audio.title ?? audio.source.title);
+        info.performer = Utility.escapeCode(audio.performer);
+        info.duration = audio.source.duration;
+        info.poster = audio.poster;
+        info.start = audio.start;
+        info.end = audio.end;
 
         info.text = "";
-        if (this.mode == "playlist") info.text += `\`${this.playlistId+1}/${this.audio.length}\`\n`;
+        if (this.mode == "playlist") info.text += `\`${this.playlistId+1}/${this.playlist.length}\`\n`;
         info.text += `Title: \`${info.title}\`\n`;
         info.text += info.performer ? `Performer: \`${info.performer}\`\n` : "No performer\n";
         info.text += `Duration: \`${Utility.getDurationString(info.duration)}\`\n`;

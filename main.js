@@ -2,7 +2,7 @@ import { Network } from "./src/network.js";
 import { Files } from "./src/files.js";
 import { User } from "./src/user.js";
 import { Utility } from "./src/utility.js";
-import { AudioSettings } from "./src/audio.js";
+import { Audio } from "./src/audio.js";
 import { Telegraf, Markup} from "telegraf";
 import filters from "telegraf/filters";
 import { TelegramClient, Api } from "telegram";
@@ -32,7 +32,7 @@ export class App {
         process.on("unhandledRejection", error => console.log(error));
         this.app.catch(error => console.log(error));
 
-        if (!Files.exists(Network.ytdlp.ffmpegPath)) throw new Error("ffmpeg binary not found, run npm install");
+        if (!Network.ytdlp.ffmpegPath || !Files.exists(Network.ytdlp.ffmpegPath)) throw new Error("ffmpeg binary not found, run npm install");
         Files.setFfmpegPath(Network.ytdlp.ffmpegPath);
 
         Files.cleanTemp();
@@ -45,19 +45,19 @@ export class App {
         })
 
         this.app.action("send", async ctx => {
-            ctx.answerCbQuery().catch(() => {});;
+            ctx.answerCbQuery().catch(() => {});
             var user = User.getUser(ctx);
             user.send();
         })
 
         this.app.action("sendAll", async ctx => {
-            ctx.answerCbQuery().catch(() => {});;
+            ctx.answerCbQuery().catch(() => {});
             var user = User.getUser(ctx);
             user.sendPlaylist();
         })
 
         this.app.action("null", async ctx => {
-            ctx.answerCbQuery().catch(() => {});;
+            ctx.answerCbQuery().catch(() => {});
             var user = User.getUser(ctx);
             if (user.status == "poster") {
                 user.setPoster(null);
@@ -65,14 +65,14 @@ export class App {
                 return;
             }
             if (user.status == "performer") {
-                user.getSettings().performer = null;
+                user.getAudio().performer = null;
                 user.sendMenu("default");
                 return;
             }
         })
 
         this.app.action("default", async ctx => {
-            ctx.answerCbQuery().catch(() => {});;
+            ctx.answerCbQuery().catch(() => {});
             var user = User.getUser(ctx);
             if (user.status == "poster") {
                 user.setPoster("default");
@@ -80,17 +80,17 @@ export class App {
                 return;
             }
             if (user.status == "performer") {
-                user.getSettings().performer = Files.loadAudio(user.getSourcePath()).performer;
+                user.getAudio().performer = user.getAudio().source.performer;
                 user.sendMenu("default");
                 return;
             }
             if (user.status == "start") {
-                user.settings.start = null;
+                user.audio.start = null;
                 user.sendMenu("default");
                 return;
             }
             if (user.status == "end") {
-                user.settings.end = null;
+                user.audio.end = null;
                 user.sendMenu("default");
                 return;
             }
@@ -98,23 +98,23 @@ export class App {
         })
 
         this.app.action("cancel", async ctx => {
-            ctx.answerCbQuery().catch(() => {});;
+            ctx.answerCbQuery().catch(() => {});
             var user = User.getUser(ctx);
-            if (user.status == "poster" && user.getSettings().poster) user.sendMenu("new");
+            if (user.status == "poster" && user.getAudio().poster) user.sendMenu("new");
             else user.sendMenu("default");
         })
 
         this.app.action("next", async ctx => {
-            ctx.answerCbQuery().catch(() => {});;
+            ctx.answerCbQuery().catch(() => {});
             var user = User.getUser(ctx);
             if (user.mode != "playlist") return;
-            if (user.playlistId + 1 == user.audio.length) return;
+            if (user.playlistId + 1 == user.playlist.length) return;
             user.playlistId += 1;
             user.sendMenu();
         })
 
         this.app.action("prev", async ctx => {
-            ctx.answerCbQuery().catch(() => {});;
+            ctx.answerCbQuery().catch(() => {});
             var user = User.getUser(ctx);
             if (user.mode != "playlist") return;
             if (user.playlistId == 0) return;
@@ -123,19 +123,19 @@ export class App {
         })
 
         this.app.action("title", async ctx => {
-            ctx.answerCbQuery().catch(() => {});;
+            ctx.answerCbQuery().catch(() => {});
             var user = User.getUser(ctx);
             user.sendMenu("title");
         })
 
         this.app.action("performer", async ctx => {
-            ctx.answerCbQuery().catch(() => {});;
+            ctx.answerCbQuery().catch(() => {});
             var user = User.getUser(ctx);
             user.sendMenu("performer");
         })
 
         this.app.action("poster", async ctx => {
-            ctx.answerCbQuery().catch(() => {});;
+            ctx.answerCbQuery().catch(() => {});
             var user = User.getUser(ctx);
             user.sendMenu("poster");
         })
@@ -143,7 +143,7 @@ export class App {
         this.app.action("delete", async ctx => {
             var user = User.getUser(ctx);
             if (!user.isAdmin()) return ctx.answerCbQuery("Only admin can delete audio from server", {show_alert: true});
-            ctx.answerCbQuery().catch(() => {});;
+            ctx.answerCbQuery().catch(() => {});
             if (user.status != "default") return;
             ctx.deleteMessage(user.menu).catch(() => {});
             user.menu = null;
@@ -182,17 +182,15 @@ export class App {
                 }
                 else if (urls.length == 1) {
                     // Single file
-                    user.audio = urls[0]
                     user.mode = "youtube";
-                    user.settings = new AudioSettings();
+                    user.audio = new Audio(urls[0]);
                     user.setPoster("default");
                     user.parseLink().then(() => user.sendMenu("new"));
                 }
                 else {
                     // Batch
                     user.mode = "playlist";
-                    user.audio = urls;
-                    user.playlistSettings = urls.map(() => new AudioSettings());
+                    user.playlist = urls.map(url => new Audio(url));
                     user.parsePlaylist();
                 }
             }
@@ -201,33 +199,33 @@ export class App {
             }
             else if (user.status == "performer") {
                 if (ctx.message.text.length > User.textLimit) return user.updateStatus("Performer is too long");
-                user.getSettings().performer = ctx.message.text;
+                user.getAudio().performer = ctx.message.text;
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
                 user.sendMenu("default");
             }
             else if (user.status == "title") {
                 if (ctx.message.text.length > User.textLimit) return user.updateStatus("Title is too long");
-                user.getSettings().title = ctx.message.text;
+                user.getAudio().title = ctx.message.text;
                 user.sendMenu("default");
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
             }
             else if (user.status == "start") {
                 var seconds = Utility.parseTimecode(ctx.message.text);
                 if (seconds == null) return user.updateStatus("Incorrect format");
-                if (seconds >= Files.loadAudio(user.getSourcePath()).duration) return user.updateStatus("Start timecode cannot be more than total duration");
-                if (user.settings.end && seconds >= user.settings.end) return user.updateStatus("Start timecode cannot be more than end timecode");
+                if (seconds >= user.audio.source.duration) return user.updateStatus("Start timecode cannot be more than total duration");
+                if (user.audio.end && seconds >= user.audio.end) return user.updateStatus("Start timecode cannot be more than end timecode");
                 user.clearStatus();
-                user.settings.start = seconds;
+                user.audio.start = seconds;
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
                 user.sendMenu("default");
             }
             else if (user.status == "end") {
                 var seconds = Utility.parseTimecode(ctx.message.text);
                 if (seconds == null) return user.updateStatus("Incorrect format");
-                if (seconds >= Files.loadAudio(user.getSourcePath()).duration) return user.updateStatus("End timecode cannot be more than total duration");
-                if (seconds <= (user.settings.start ?? 0)) return user.updateStatus("End timecode must be more than start timecode");
+                if (seconds >= user.audio.source.duration) return user.updateStatus("End timecode cannot be more than total duration");
+                if (seconds <= (user.audio.start ?? 0)) return user.updateStatus("End timecode must be more than start timecode");
                 user.clearStatus();
-                user.settings.end = seconds;
+                user.audio.end = seconds;
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
                 user.sendMenu("default");
             }

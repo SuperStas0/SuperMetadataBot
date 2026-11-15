@@ -1,31 +1,11 @@
 export class Audio {
-    constructor () {
+    /**
+     * @param {string} [url]
+     */
+    constructor (url) {
         /** @type {AudioSource} */
-        this.source = null;
-    }
-}
+        this.source = new AudioSource(url);
 
-export class AudioSource {
-    constructor () {
-        /** @type {string} */
-        this.path = null;
-
-        /** @type {number | null} */
-        this.id = null;
-
-        /** @type {string} */
-        this.title = null;
-
-        /** @type {string} */
-        this.performer = null;
-
-        /** @type {number} */
-        this.duration = null;
-    }
-}
-
-export class AudioSettings {
-    constructor () {
         /** @type {string | null} */
         this.title = null;
 
@@ -43,5 +23,33 @@ export class AudioSettings {
 
         /** @type {string | null} */
         this.posterId = null;
+    }
+}
+
+export class AudioSource {
+    /**
+     * @param {string} [url]
+     */
+    constructor (url) {
+        /** @type {string} */
+        this.url = url ?? null;
+
+        /** @type {string} */
+        this.path = null;
+
+        /** @type {string | null} */
+        this.id = null;
+
+        /** @type {string | null} */
+        this.posterId = null;
+
+        /** @type {string} */
+        this.title = null;
+
+        /** @type {string} */
+        this.performer = null;
+
+        /** @type {number} */
+        this.duration = null;
     }
 }
