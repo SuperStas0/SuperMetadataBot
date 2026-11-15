@@ -1,7 +1,7 @@
 import { App }  from "../main.js";
 import { Utility } from "./utility.js";
 import { Files } from "./files.js";
-import { Audio } from "./audio.js";
+import { Audio, AudioSource } from "./audio.js";
 import { Menus } from "./menus.js";
 import { Network } from "./network.js";
 
@@ -41,12 +41,10 @@ export class User {
         this.status = "loading";
 
         var audio = this.getAudio();
-        var source = audio.source;
-        var id = Utility.getIdFromUrl(source.url);
-        source.url = `https://www.youtube.com/watch?v=${id}`;
-        source.path = this.getSourcePath();
-        var url = source.url;
-        var path = source.path;
+        var id = Utility.getIdFromUrl(audio.source.url);
+        audio.source.url = `https://www.youtube.com/watch?v=${id}`;
+        var url = audio.source.url;
+        var path = this.getSourcePath();
 
         this.updateStatus(`Fetching: ${url}`);
 
@@ -59,11 +57,11 @@ export class User {
                     var metadata = await Network.fetchInfo(url);
                     if (metadata.is_live) throw new Error("Live streams are not supported");
                     if (metadata.duration > Network.maxDuration) throw new Error("Video is too long");
-                    Files.saveAudio(path, {id: null, title: metadata.title, performer: metadata.channel, duration: metadata.duration || 0});
+                    Files.saveAudio(path, Object.assign(new AudioSource(), {title: metadata.title, performer: metadata.channel, duration: metadata.duration || 0}));
                 }
                 if (!Files.exists(Files.path(path, "audio.m4a"))) {
                     this.updateStatus(`Downloading: ${url}`);
-                    audio = Network.downloadMusic(url, path, true).then(() => this.updateStatus(`Fetching: ${url}`));
+                    audio = Network.downloadMusic(url, path, this.isAdmin()).then(() => this.updateStatus(`Fetching: ${url}`));
                 }
                 if (!Files.exists(Files.path(path, "poster.jpg"))) poster = Network.downloadPoster(url, path);
 
@@ -71,8 +69,15 @@ export class User {
             });
             Files.touch(Files.path(path, "audio.m4a"));
 
-            Object.assign(source, Files.loadAudio(path));
-            audio.performer = source.performer;
+            audio.source = Files.loadAudio(path);
+            audio.source.url = url;
+            audio.performer = audio.source.performer;
+            if (!this.isAdmin() && Files.getFileSize(Files.path(path, "audio.m4a")) >= Network.botFileLimit) {
+                this.clearStatus();
+                this.status = "none";
+                App.app.telegram.sendMessage(this.id, `This audio is over the ${Network.botFileLimit / 1024 / 1024} MB limit of this bot. Host your own bot to remove the limit: https://github.com/SuperStas0/SuperMetadata`).catch(() => {});
+                return false;
+            }
             this.clearStatus();
             await this.sendSource();
             this.status = "default";
@@ -191,8 +196,8 @@ export class User {
                 }
             }
         }
-        else if (mode == "title") App.app.telegram.editMessageText(this.id, this.menu, null, menuText, Menus.Cancel);
-        else if (mode == "performer") App.app.telegram.editMessageText(this.id, this.menu, null, menuText, audio.performer ? (audio.performer == audio.source.performer ? Menus.RemoveOnly : Menus.DefaultNRemove) : Menus.DefaultOnly);
+        else if (mode == "title") this.editMenu(menuText, Menus.Cancel);
+        else if (mode == "performer") this.editMenu(menuText, audio.performer ? (audio.performer == audio.source.performer ? Menus.RemoveOnly : Menus.DefaultNRemove) : Menus.DefaultOnly);
         else if (mode == "poster") {
             if (audio.poster) {
                 App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
@@ -210,13 +215,27 @@ export class User {
                     await App.app.telegram.editMessageText(this.id, this.menu, null, menuText, Menus.DefaultOnly);
                 }
                 catch (error) {
+                    if (!error.response?.description?.includes("no text in the message to edit")) console.log(error);
                     App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
                     var msg = await App.app.telegram.sendMessage(this.id, menuText, Menus.DefaultOnly);
                     this.menu = msg.message_id;
                 }
             }
         }
-        else if (mode == "start" || mode == "end") App.app.telegram.editMessageText(this.id, this.menu, null, menuText, Menus.DefaultOnly);
+        else if (mode == "start" || mode == "end") this.editMenu(menuText, Menus.DefaultOnly);
+    }
+
+    /**
+     * @param {string} text
+     * @param {any} markup
+     */
+    async editMenu(text, markup) {
+        try {
+            await App.app.telegram.editMessageText(this.id, this.menu, null, text, markup);
+        }
+        catch (error) {
+            if (!error.response?.description?.includes("message is not modified")) console.log(error);
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { join } from "path";
 import ffmpeg from "fluent-ffmpeg";
+import { AudioSource } from "./audio.js";
 
 export class Files {
     /** @type {ConfigFile} */
@@ -49,15 +50,15 @@ export class Files {
 
     /**
      * @param {string} path
-     * @return {AudioData}
+     * @return {AudioSource}
      */
     static loadAudio(path) {
-        return this.load(this.path(path, "data.json"));
+        return Object.assign(new AudioSource(), this.load(this.path(path, "data.json")), {path: path});
     }
 
     /**
      * @param {string} path
-     * @param {AudioData} data
+     * @param {AudioSource} data
      */
     static saveAudio(path, data) {
         this.save(this.path(path, "data.json"), {id: data.id, posterId: data.posterId, title: data.title, performer: data.performer, duration: data.duration});
