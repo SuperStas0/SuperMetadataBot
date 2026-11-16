@@ -48,8 +48,9 @@ export class User {
         var url = audio.source.url;
         var path = this.getSourcePath();
         var admin = this.isAdmin();
+        var file;
 
-        if (!Files.exists(Files.path(path, "audio.m4a")) && Files.getFreeSpace() < Network.minFreeSpace) {
+        if (!Files.list(path).some(name => name.endsWith(".m4a")) && Files.getFreeSpace() < Network.minFreeSpace) {
             App.clean(true);
             if (Files.getFreeSpace() < Network.minFreeSpace) return this.decline("Not enough free space on the server, try again later");
         }
@@ -67,35 +68,31 @@ export class User {
                     if (metadata.duration > Network.maxDuration) throw new Error("Video is too long");
                     Files.saveAudio(path, Object.assign(new AudioSource(), {title: metadata.title, performer: metadata.channel, duration: metadata.duration || 0}));
                 }
-                if (admin) {
-                    var source = Files.loadAudio(path);
-                    if (source.limited) {
-                        Files.delete(Files.path(path, "audio.m4a"));
-                        source.id = null;
-                        source.limited = false;
-                        Files.saveAudio(path, source);
-                    }
+
+                var source = Files.loadAudio(path);
+                if (admin && source.limited) {
+                    source.id = null;
+                    source.limited = false;
+                    Files.saveAudio(path, source);
                 }
-                if (!Files.exists(Files.path(path, "audio.m4a"))) {
+                var best = Files.path(path, "audio.m4a");
+                file = admin || Files.exists(best) && Files.getFileSize(best) < Network.botFileLimit ? "audio.m4a" : "audio-limited.m4a";
+                if (!Files.exists(Files.path(path, file))) {
                     this.updateStatus(`Downloading: ${url}`);
-                    tasks.push(Utility.queue("download", Network.maxDownloads, () => Utility.timeout(Network.downloadMusic(url, path, admin), Network.downloadTimeout, "Downloading timed out")).then(() => {
-                        var source = Files.loadAudio(path);
-                        source.limited = !admin;
-                        Files.saveAudio(path, source);
-                        this.updateStatus(`Fetching: ${url}`);
-                    }));
+                    tasks.push(Utility.queue("download", Network.maxDownloads, () => Utility.timeout(Network.downloadMusic(url, path, admin), Network.downloadTimeout, "Downloading timed out")).then(() => this.updateStatus(`Fetching: ${url}`)));
                 }
                 if (!Files.exists(Files.path(path, "poster.jpg"))) tasks.push(Network.downloadPoster(url, path));
 
                 await Promise.all(tasks);
-                Files.touch(Files.path(path, "audio.m4a"));
+                Files.touch(Files.path(path, file));
             });
             App.clean(true);
 
             audio.source = Files.loadAudio(path);
             audio.source.url = url;
+            audio.source.file = file;
             audio.performer = audio.source.performer;
-            if (!admin && Files.getFileSize(Files.path(path, "audio.m4a")) >= Network.botFileLimit) {
+            if (Files.getFileSize(Files.path(path, file)) >= Network.botFileLimit && !admin) {
                 var sent = audio.source.id && await App.app.telegram.sendAudio(this.id, audio.source.id).then(() => true, () => false);
                 return sent ? this.decline() : this.decline(`This audio is over the ${Network.botFileLimit / 1024 / 1024} MB limit of this bot. Host your own bot to remove the limit: https://github.com/SuperStas0/SuperMetadata`);
             }
@@ -137,8 +134,8 @@ export class User {
         this.menu = null;
 
         try {
-            if (audio.start || audio.end) await Files.cut(Files.path(source.path, "audio.m4a"), audioPath, audio.start, duration);
-            else Files.copy(Files.path(source.path, "audio.m4a"), audioPath);
+            if (audio.start || audio.end) await Files.cut(Files.path(source.path, source.file), audioPath, audio.start, duration);
+            else Files.copy(Files.path(source.path, source.file), audioPath);
 
             await Network.uploadFile(this.id, audioPath, {title: title, performer: audio.performer, duration: duration, thumbnail: audio.poster && {source: audio.poster == "default" ? Files.path(source.path, "poster.jpg") : this.getPosterPath()}});
         }
@@ -167,8 +164,9 @@ export class User {
             }
         }
         this.updateStatus(`Uploading: ${source.title}`);
-        var msg = await Network.uploadFile(this.id, Files.path(source.path, "audio.m4a"), {title: source.title, performer: source.performer, duration: source.duration, thumbnail: {source: Files.path(source.path, "poster.jpg")}});
+        var msg = await Network.uploadFile(this.id, Files.path(source.path, source.file), {title: source.title, performer: source.performer, duration: source.duration, thumbnail: {source: Files.path(source.path, "poster.jpg")}});
         source.id = msg.audio.file_id;
+        source.limited = source.file != "audio.m4a";
         Files.saveAudio(source.path, source);
         this.clearStatus();
     }

@@ -9,6 +9,7 @@ Telegram bot to download audio from YouTube and edit its metadata.
 4. Create a bot with [@BotFather](https://t.me/BotFather) and copy its API key.
 5. Run `node setup.js`, enter the bot's API key and the needed fields for your account.
 6. When asked for the 2FA code, enter the one you receive from Telegram.
+7. Optional, if YouTube asks to sign in: put your YouTube cookies in Netscape format into `static\cookies.txt`.
 
 # Usage
 Public instance: [@supermetadatabot](https://t.me/supermetadatabot). Hosting your own is recommended.

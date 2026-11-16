@@ -45,8 +45,28 @@ export class Network {
     /**
      * @param {string} url
      */
+    /**
+     * @param {(cookies?: string) => Promise<any>} task
+     */
+    static async withCookies(task) {
+        var source = Files.path("static", "cookies.txt");
+        if (!Files.exists(source)) return await task();
+        var copy = Files.path("downloads", `cookies-${Math.random().toString(36).slice(2)}.txt`);
+        Files.createFolder("downloads");
+        Files.copy(source, copy);
+        try {
+            return await task(copy);
+        }
+        finally {
+            Files.tryDelete(copy);
+        }
+    }
+
+    /**
+     * @param {string} url
+     */
     static fetchInfo(url) {
-        return this.ytdlp.getInfoAsync(url, {});
+        return this.withCookies(cookies => this.ytdlp.getInfoAsync(url, {cookies: cookies}));
     }
 
     /**
@@ -57,10 +77,10 @@ export class Network {
     static downloadMusic(url, path, allowLarge) {
         var settings = {
             format: allowLarge ? { filter: "audioonly", type: "m4a", quality: "highest" } : "bestaudio[ext=m4a][filesize<50M]/bestaudio[filesize<50M]/worstaudio",
-            output: Files.path(path, "audio.m4a"),
+            output: Files.path(path, allowLarge ? "audio.m4a" : "audio-limited.m4a"),
             noPlaylist: true
         }
-        return this.ytdlp.downloadAsync(url, settings);
+        return this.withCookies(cookies => this.ytdlp.downloadAsync(url, {...settings, cookies: cookies}));
     }
 
     /**
@@ -68,7 +88,7 @@ export class Network {
      * @param {string} path
      */
     static async downloadPoster(url, path) {
-        for (var posterUrl of (await (this.ytdlp.getThumbnailsAsync(url))).reverse().map(el => el.url)) {
+        for (var posterUrl of (await this.fetchInfo(url)).thumbnails.reverse().map(el => el.url)) {
             if (!posterUrl.includes(".jpg") || posterUrl.includes(".webp")) continue;
             if (await this.downloadImage(posterUrl, Files.path(path, "poster.jpg"), this.posterFileLimit)) return Promise.resolve();
         }

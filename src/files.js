@@ -147,6 +147,9 @@ export class Files {
     }
 
     static cleanTemp() {
+        for (var name of this.list("downloads")) {
+            if (/^cookies-.*\.txt$/.test(name)) this.tryDelete(this.path("downloads", name));
+        }
         for (var user of this.list(this.path("downloads", "users"))) {
             for (var name of this.list(this.path("downloads", "users", user))) {
                 if (name.endsWith(".m4a")) this.delete(this.path("downloads", "users", user, name));
@@ -181,10 +184,10 @@ export class Files {
                 if (!name.startsWith("audio.m4a")) continue;
                 var stats = fs.statSync(path);
                 if (now - stats.mtimeMs > maxAge) this.tryDelete(path);
-                else if (name == "audio.m4a") audios.push({path: path, size: stats.size, time: stats.mtimeMs});
+                else if (name.endsWith(".m4a")) audios.push({path: path, size: stats.size, time: stats.mtimeMs});
             }
             var dataPath = this.path(folder, "data.json");
-            if (!this.exists(this.path(folder, "audio.m4a")) && now - fs.statSync(this.exists(dataPath) ? dataPath : folder).mtimeMs > maxFolderAge) this.tryDelete(folder);
+            if (!this.list(folder).some(name => name.endsWith(".m4a")) && now - fs.statSync(this.exists(dataPath) ? dataPath : folder).mtimeMs > maxFolderAge) this.tryDelete(folder);
         }
 
         var total = audios.reduce((sum, audio) => sum + audio.size, 0);

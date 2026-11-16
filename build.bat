@@ -51,7 +51,7 @@ if errorlevel 1 exit /b 1
 if defined doRelease (
     if not exist release mkdir release
     if exist release\Metadata.zip del release\Metadata.zip
-    tar -a -c -f release\Metadata.zip --exclude config.json main.js src static package.json package-lock.json readme.md LICENSE.md
+    tar -a -c -f release\Metadata.zip --exclude config.json --exclude cookies.txt main.js src static package.json package-lock.json readme.md LICENSE.md
     if errorlevel 1 exit /b 1
 )
 exit /b 0

@@ -54,5 +54,8 @@ export class AudioSource {
 
         /** @type {boolean} */
         this.limited = false;
+
+        /** @type {string} */
+        this.file = "audio.m4a";
     }
 }
