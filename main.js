@@ -18,10 +18,16 @@ export class App {
 
     static largeFiles = {};
 
-    static clean() {
+    static cacheAge = 7 * 24 * 60 * 60 * 1000;
+
+    static cacheFolderAge = 30 * 24 * 60 * 60 * 1000;
+
+    static cacheSize = 5 * 1024 * 1024 * 1024;
+
+    static clean(force) {
         try {
-            if (Object.values(this.data).some(user => user.status == "loading")) return;
-            Files.cleanCache(7 * 24 * 60 * 60 * 1000);
+            if (!force && Object.values(this.data).some(user => user.status == "loading")) return;
+            Files.cleanCache(this.cacheAge, this.cacheFolderAge, this.cacheSize);
         }
         catch (error) {
             console.log(error);
@@ -37,7 +43,10 @@ export class App {
 
         Files.cleanTemp();
         this.clean();
-        setInterval(() => this.clean(), 24 * 60 * 60 * 1000);
+        var cleaner = setInterval(() => this.clean(), 24 * 60 * 60 * 1000);
+
+        process.once("SIGINT", () => this.stop("SIGINT"));
+        process.once("SIGTERM", () => this.stop("SIGTERM"));
 
         this.app.start(async ctx => {
             if (ctx.chat.type != "private") return ctx.reply("Sorry, bot only works in DMs");
@@ -189,6 +198,7 @@ export class App {
                 }
                 else {
                     // Batch
+                    if (!user.isAdmin() && urls.length > User.maxPlaylist) return user.updateStatus(`Too many links, send up to ${User.maxPlaylist} at once`);
                     user.mode = "playlist";
                     user.playlist = urls.map(url => new Audio(url));
                     user.parsePlaylist();
@@ -259,6 +269,19 @@ export class App {
             console.log("\n\nStarted!\n");
             this.app.telegram.sendMessage(Files.config.admin, "Started", {disable_notification: true});
         });
+        clearInterval(cleaner);
+    }
+
+    /**
+     * @param {string} signal
+     */
+    static stop(signal) {
+        try {
+            this.app.stop(signal);
+        }
+        catch {
+            process.exit(0);
+        }
     }
 
     static {

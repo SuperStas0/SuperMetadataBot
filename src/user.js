@@ -9,6 +9,8 @@ import { Network } from "./network.js";
 export class User {
     static textLimit = 256;
 
+    static maxPlaylist = 10;
+
     /**
      * @param {Context} ctx
      */
@@ -45,38 +47,57 @@ export class User {
         audio.source.url = `https://www.youtube.com/watch?v=${id}`;
         var url = audio.source.url;
         var path = this.getSourcePath();
+        var admin = this.isAdmin();
+
+        if (!Files.exists(Files.path(path, "audio.m4a")) && Files.getFreeSpace() < Network.minFreeSpace) {
+            App.clean(true);
+            if (Files.getFreeSpace() < Network.minFreeSpace) return this.decline("Not enough free space on the server, try again later");
+        }
 
         this.updateStatus(`Fetching: ${url}`);
 
         try {
             await Utility.lock(path, async () => {
-                var audio, poster;
+                var tasks = [];
 
                 Files.createFolder(path);
                 if (!Files.exists(Files.path(path, "data.json"))) {
-                    var metadata = await Network.fetchInfo(url);
+                    var metadata = await Utility.timeout(Network.fetchInfo(url), Network.infoTimeout, "Fetching info timed out");
                     if (metadata.is_live) throw new Error("Live streams are not supported");
                     if (metadata.duration > Network.maxDuration) throw new Error("Video is too long");
                     Files.saveAudio(path, Object.assign(new AudioSource(), {title: metadata.title, performer: metadata.channel, duration: metadata.duration || 0}));
                 }
+                if (admin) {
+                    var source = Files.loadAudio(path);
+                    if (source.limited) {
+                        Files.delete(Files.path(path, "audio.m4a"));
+                        source.id = null;
+                        source.limited = false;
+                        Files.saveAudio(path, source);
+                    }
+                }
                 if (!Files.exists(Files.path(path, "audio.m4a"))) {
                     this.updateStatus(`Downloading: ${url}`);
-                    audio = Network.downloadMusic(url, path, this.isAdmin()).then(() => this.updateStatus(`Fetching: ${url}`));
+                    tasks.push(Utility.queue("download", Network.maxDownloads, () => Utility.timeout(Network.downloadMusic(url, path, admin), Network.downloadTimeout, "Downloading timed out")).then(() => {
+                        var source = Files.loadAudio(path);
+                        source.limited = !admin;
+                        Files.saveAudio(path, source);
+                        this.updateStatus(`Fetching: ${url}`);
+                    }));
                 }
-                if (!Files.exists(Files.path(path, "poster.jpg"))) poster = Network.downloadPoster(url, path);
+                if (!Files.exists(Files.path(path, "poster.jpg"))) tasks.push(Network.downloadPoster(url, path));
 
-                await Promise.all([audio, poster]);
+                await Promise.all(tasks);
+                Files.touch(Files.path(path, "audio.m4a"));
             });
-            Files.touch(Files.path(path, "audio.m4a"));
+            App.clean(true);
 
             audio.source = Files.loadAudio(path);
             audio.source.url = url;
             audio.performer = audio.source.performer;
-            if (!this.isAdmin() && Files.getFileSize(Files.path(path, "audio.m4a")) >= Network.botFileLimit) {
-                this.clearStatus();
-                this.status = "none";
-                App.app.telegram.sendMessage(this.id, `This audio is over the ${Network.botFileLimit / 1024 / 1024} MB limit of this bot. Host your own bot to remove the limit: https://github.com/SuperStas0/SuperMetadata`).catch(() => {});
-                return false;
+            if (!admin && Files.getFileSize(Files.path(path, "audio.m4a")) >= Network.botFileLimit) {
+                var sent = audio.source.id && await App.app.telegram.sendAudio(this.id, audio.source.id).then(() => true, () => false);
+                return sent ? this.decline() : this.decline(`This audio is over the ${Network.botFileLimit / 1024 / 1024} MB limit of this bot. Host your own bot to remove the limit: https://github.com/SuperStas0/SuperMetadata`);
             }
             this.clearStatus();
             await this.sendSource();
@@ -84,12 +105,20 @@ export class User {
         }
         catch (error) {
             console.log(error);
-            this.clearStatus();
-            this.status = "none";
-            App.app.telegram.sendMessage(this.id, `Failed to load: ${url}`).catch(() => {});
+            this.decline(`Failed to load: ${url}`);
             return false;
         }
         return true;
+    }
+
+    /**
+     * @param {string} [text]
+     */
+    decline(text) {
+        this.clearStatus();
+        this.status = "none";
+        if (text) App.app.telegram.sendMessage(this.id, text).catch(() => {});
+        return false;
     }
 
     async send() {

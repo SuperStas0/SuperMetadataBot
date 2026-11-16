@@ -16,6 +16,14 @@ export class Network {
 
     static maxDuration = 4 * 60 * 60;
 
+    static maxDownloads = 3;
+
+    static minFreeSpace = 1024 * 1024 * 1024;
+
+    static infoTimeout = 90 * 1000;
+
+    static downloadTimeout = 30 * 60 * 1000;
+
     static {
         dns.setDefaultResultOrder("ipv4first");
     }

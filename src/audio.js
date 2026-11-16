@@ -51,5 +51,8 @@ export class AudioSource {
 
         /** @type {number} */
         this.duration = null;
+
+        /** @type {boolean} */
+        this.limited = false;
     }
 }

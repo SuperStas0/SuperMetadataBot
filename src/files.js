@@ -7,6 +7,11 @@ export class Files {
     /** @type {ConfigFile} */
     static config = this.load("static", "config.json");
 
+    static {
+        var missing = ["botToken", "admin", "apiId", "apiHash"].filter(key => !this.config[key]);
+        if (missing.length) throw new Error(`static\\config.json is missing: ${missing.join(", ")}`);
+    }
+
     /** @type {string} */
     static helpText = this.read("static", "help.md");
 
@@ -61,7 +66,7 @@ export class Files {
      * @param {AudioSource} data
      */
     static saveAudio(path, data) {
-        this.save(this.path(path, "data.json"), {id: data.id, posterId: data.posterId, title: data.title, performer: data.performer, duration: data.duration});
+        this.save(this.path(path, "data.json"), {id: data.id, posterId: data.posterId, title: data.title, performer: data.performer, duration: data.duration, limited: data.limited});
     }
 
     /**
@@ -72,6 +77,11 @@ export class Files {
      */
     static exists(...path) {
         return fs.existsSync(this.path(...path));
+    }
+
+    static getFreeSpace() {
+        var stats = fs.statfsSync(this.exists("downloads") ? "downloads" : ".");
+        return stats.bavail * stats.bsize;
     }
 
     /**
@@ -145,13 +155,49 @@ export class Files {
     }
 
     /**
-     * @param {number} maxAge
+     * @param {string} path
      */
-    static cleanCache(maxAge) {
+    static tryDelete(path) {
+        try {
+            this.delete(path);
+        }
+        catch (error) {
+            console.log(error);
+        }
+    }
+
+    /**
+     * @param {number} maxAge
+     * @param {number} maxFolderAge
+     * @param {number} maxSize
+     */
+    static cleanCache(maxAge, maxFolderAge, maxSize) {
+        var now = Date.now();
+        var audios = [];
         for (var id of this.list(this.path("downloads", "youtube"))) {
-            for (var name of this.list(this.path("downloads", "youtube", id))) {
-                var path = this.path("downloads", "youtube", id, name);
-                if (name.startsWith("audio.m4a") && Date.now() - fs.statSync(path).mtimeMs > maxAge) this.delete(path);
+            var folder = this.path("downloads", "youtube", id);
+            for (var name of this.list(folder)) {
+                var path = this.path(folder, name);
+                if (!name.startsWith("audio.m4a")) continue;
+                var stats = fs.statSync(path);
+                if (now - stats.mtimeMs > maxAge) this.tryDelete(path);
+                else if (name == "audio.m4a") audios.push({path: path, size: stats.size, time: stats.mtimeMs});
+            }
+            var dataPath = this.path(folder, "data.json");
+            if (!this.exists(this.path(folder, "audio.m4a")) && now - fs.statSync(this.exists(dataPath) ? dataPath : folder).mtimeMs > maxFolderAge) this.tryDelete(folder);
+        }
+
+        var total = audios.reduce((sum, audio) => sum + audio.size, 0);
+        for (var audio of audios.sort((first, second) => first.time - second.time)) {
+            if (total <= maxSize) break;
+            this.tryDelete(audio.path);
+            total -= audio.size;
+        }
+
+        for (var user of this.list(this.path("downloads", "users"))) {
+            for (var name of this.list(this.path("downloads", "users", user))) {
+                var path = this.path("downloads", "users", user, name);
+                if (/^poster\d*\.jpg$/.test(name) && now - fs.statSync(path).mtimeMs > maxAge) this.tryDelete(path);
             }
         }
     }

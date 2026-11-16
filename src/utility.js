@@ -2,6 +2,9 @@ export class Utility {
     /** @type {Record<string, Promise<void>>} */
     static locks = {};
 
+    /** @type {Record<string, {running: number, waiting: (() => void)[]}>} */
+    static queues = {};
+
     /**
      * @param {number} duration
      * @param {number | null} start
@@ -71,6 +74,39 @@ export class Utility {
         }
         finally {
             if (this.locks[key] == current) delete this.locks[key];
+        }
+    }
+
+    /**
+     * @param {string} name
+     * @param {number} max
+     * @param {() => Promise<any>} task
+     */
+    static async queue(name, max, task) {
+        var queue = this.queues[name] ??= {running: 0, waiting: []};
+        if (queue.running >= max) await new Promise(resolve => queue.waiting.push(resolve));
+        queue.running++;
+        try {
+            return await task();
+        }
+        finally {
+            queue.running--;
+            queue.waiting.shift()?.();
+        }
+    }
+
+    /**
+     * @param {Promise<any>} promise
+     * @param {number} ms
+     * @param {string} message
+     */
+    static async timeout(promise, ms, message) {
+        var timer;
+        try {
+            return await Promise.race([promise, new Promise((resolve, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); })]);
+        }
+        finally {
+            clearTimeout(timer);
         }
     }
 
