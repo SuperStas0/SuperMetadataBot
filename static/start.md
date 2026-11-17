@@ -1,4 +1,4 @@
-Hello
+*Hello*
 This bot is meant to download and edit audio
-Bot only works in DMs!
+_Bot only works in DMs!_
 For full usage instructions use /help

@@ -132,6 +132,13 @@ export class Utility {
     }
 
     /**
+     * @param {string} text
+     */
+    static escapeMarkdown(text) {
+        return text.replace(/[\\[\]()~>#+\-=|{}.!]/g, "\\$&");
+    }
+
+    /**
      * @param {string} name
      */
     static getFileName(name) {

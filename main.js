@@ -3,6 +3,7 @@ import { Files } from "./src/files.js";
 import { User } from "./src/user.js";
 import { Utility } from "./src/utility.js";
 import { Audio } from "./src/audio.js";
+import { Menus } from "./src/menus.js";
 import { Telegraf, Markup} from "telegraf";
 import filters from "telegraf/filters";
 import { TelegramClient, Api } from "telegram";
@@ -50,7 +51,7 @@ export class App {
 
         this.app.start(async ctx => {
             if (ctx.chat.type != "private") return ctx.reply("Sorry, bot only works in DMs");
-            ctx.reply(Files.startText);
+            ctx.reply(Files.startText, Menus.Simple);
         })
 
         this.app.action("send", async ctx => {
@@ -176,13 +177,13 @@ export class App {
         })
 
         this.app.command("help", async ctx => {
-            ctx.reply(Files.helpText);
+            ctx.reply(Files.helpText, Menus.Simple);
         })
 
         this.app.command("cookies", async ctx => {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
-            ctx.reply(`YouTube asks for a login on age restricted videos and when it blocks the server as a bot.\nSend your YouTube cookies to this chat as a cookies.txt file in Netscape format. The file gives access to your account, use a secondary account.\nThe cookies are used only for your own requests and only when a video needs them. Only YouTube and Google cookies are kept.\nUse /removecookies to delete them.\nCookies: ${user.hasCookies() ? "saved" : "not saved"}`);
+            ctx.reply(`${Files.cookiesText}\nCookies: *${user.hasCookies() ? "saved" : "not saved"}*`, Menus.Simple);
         })
 
         this.app.command("removecookies", async ctx => {

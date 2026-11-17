@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { join } from "path";
 import ffmpeg from "fluent-ffmpeg";
 import { AudioSource } from "./audio.js";
+import { Utility } from "./utility.js";
 
 export class Files {
     /** @type {ConfigFile} */
@@ -13,10 +14,13 @@ export class Files {
     }
 
     /** @type {string} */
-    static startText = this.read("static", "start.md");
+    static startText = Utility.escapeMarkdown(this.read("static", "start.md"));
 
     /** @type {string} */
-    static helpText = this.read("static", "help.md");
+    static helpText = Utility.escapeMarkdown(this.read("static", "help.md"));
+
+    /** @type {string} */
+    static cookiesText = Utility.escapeMarkdown(this.read("static", "cookies.md"));
 
     /**
      * @overload

@@ -14,7 +14,7 @@ export class Menus {
         return {...Markup.inlineKeyboard(rows), parse_mode: "MarkdownV2"};
     }
 
-    static Simple = {parse_mode: "MarkdownV2"};
+    static Simple = {parse_mode: "MarkdownV2", link_preview_options: {is_disabled: true}};
 
     static Main = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Start", "start", 2], ["End", "end", 2], ["Poster", "poster", 3], ["Delete", "delete", 4]);
 
