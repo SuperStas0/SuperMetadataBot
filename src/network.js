@@ -3,10 +3,19 @@ import { Files } from "./files.js";
 import { YtDlp } from "ytdlp-nodejs";
 import ffmpegStatic from "ffmpeg-static";
 import dns from "node:dns";
-import { Api } from "telegram";
+import { TelegramClient, Api } from "telegram";
+import { StringSession } from "telegram/sessions/index.js";
+import { Logger } from "telegram/extensions/index.js";
 
 export class Network {
     static ytdlp = new YtDlp({ffmpegPath: ffmpegStatic});
+
+    /** @type {TelegramClient | null} */
+    static userClient = null;
+
+    static userClientTimer = null;
+
+    static userClientIdle = 5 * 60 * 1000;
 
     static botFileLimit = 50 * 1024 * 1024;
 
@@ -23,6 +32,8 @@ export class Network {
     static minFreeSpace = 1024 * 1024 * 1024;
 
     static infoTimeout = 90 * 1000;
+
+    static playlistTimeout = 5 * 60 * 1000;
 
     static downloadTimeout = 30 * 60 * 1000;
 
@@ -90,6 +101,15 @@ export class Network {
 
     /**
      * @param {string} url
+     * @param {string | null} [cookies]
+     */
+    static async fetchPlaylist(url, cookies) {
+        var info = await this.fetchInfo(url, cookies);
+        return {title: info.title, ids: (info.entries ?? []).map(entry => entry?.id).filter(id => /^[A-Za-z0-9_-]{11}$/.test(id))};
+    }
+
+    /**
+     * @param {string} url
      * @param {string} path
      * @param {boolean | null} allowLarge
      * @param {string | null} [cookies]
@@ -150,13 +170,10 @@ export class Network {
         try {
             var msg = (await App.data[chat].statusMessage).text;
 
-            await App.userClient.connect();
-            try {
-                await App.userClient.sendFile(App.app.botInfo.username, {file: path, caption: hash, thumb: settings.thumbnail, progressCallback: progress => { if (progress * 100 < shown + 5) return; shown = Math.floor(progress * 100); App.data[chat].updateStatus(`${msg}\n${shown}%`); }, attributes: [new Api.DocumentAttributeAudio({duration: settings.duration, title: settings.title, performer: settings.performer})]});
-            }
-            finally {
-                await App.userClient.disconnect();
-            }
+            await this.withUserClient(client => {
+                shown = -5;
+                return client.sendFile(App.app.botInfo.username, {file: path, caption: hash, thumb: settings.thumbnail, progressCallback: progress => { if (progress * 100 < shown + 5) return; shown = Math.floor(progress * 100); App.data[chat].updateStatus(`${msg}\n${shown}%`); }, attributes: [new Api.DocumentAttributeAudio({duration: settings.duration, title: settings.title, performer: settings.performer})]});
+            })
             var fileId = await Promise.race([filePromise, new Promise((resolve, reject) => { timer = setTimeout(() => reject(new Error("Large file was not received by the bot, check that the user client account is the admin")), 60 * 1000); })]);
         }
         finally {
@@ -164,5 +181,44 @@ export class Network {
             delete App.largeFiles[hash];
         }
         return await App.app.telegram.sendAudio(chat, fileId);
+    }
+
+    static async getUserClient() {
+        clearTimeout(this.userClientTimer);
+        if (!this.userClient) {
+            this.userClient = new TelegramClient(new StringSession(Files.config.sessionId), Files.config.apiId, Files.config.apiHash, {connectionRetries: 5, baseLogger: new Logger("error")});
+        }
+        if (!this.userClient.connected) await this.userClient.connect();
+        return this.userClient;
+    }
+
+    static async dropUserClient() {
+        clearTimeout(this.userClientTimer);
+        var client = this.userClient;
+        this.userClient = null;
+        if (client) await client.destroy().catch(() => {});
+    }
+
+    /**
+     * @param {(client: TelegramClient) => Promise<any>} task
+     */
+    static async withUserClient(task) {
+        try {
+            for (var attempt = 1; ; attempt++) {
+                try {
+                    return await task(await this.getUserClient());
+                }
+                catch (error) {
+                    await this.dropUserClient();
+                    if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED|USER_DEACTIVATED/.test(error.errorMessage ?? "")) throw new Error("User client session is no longer valid, run the build script with -s to log in again");
+                    if (attempt >= 2) throw error;
+                    console.log(error);
+                }
+            }
+        }
+        finally {
+            this.userClientTimer = setTimeout(() => this.dropUserClient(), this.userClientIdle);
+            this.userClientTimer.unref();
+        }
     }
 }

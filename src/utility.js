@@ -35,6 +35,32 @@ export class Utility {
     }
 
     /**
+     * @param {Context} ctx
+     * @returns {string[]}
+     */
+    static getPlaylistUrls(ctx) {
+        if (!ctx.message.entities) return [];
+        var ids = ctx.message.entities.filter(entity => entity.type == "url").map(entity => this.getListFromUrl(ctx.message.text.slice(entity.offset, entity.offset + entity.length))).filter(id => id);
+        return [...new Set(ids)].map(id => `https://www.youtube.com/playlist?list=${id}`);
+    }
+
+    /**
+     * @param {string} url
+     * @returns {string | null}
+     */
+    static getListFromUrl(url) {
+        try {
+            var parsed = new URL(url.includes("://") ? url : `https://${url}`);
+        }
+        catch {
+            return null;
+        }
+        var host = parsed.hostname.replace(/^(www|m|music)\./, "");
+        var id = host == "youtube.com" && parsed.pathname == "/playlist" ? parsed.searchParams.get("list") : null;
+        return id && /^[A-Za-z0-9_-]{10,64}$/.test(id) ? id : null;
+    }
+
+    /**
      * @param {string} url
      * @returns {string | null}
      */

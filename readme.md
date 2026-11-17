@@ -18,6 +18,7 @@ Public instance: [@supermetadatabot](https://t.me/supermetadatabot). Hosting you
 Load audio into the bot by any of:
 - Built-in YouTube search
 - YouTube video link
+- YouTube playlist link (asks for confirmation first)
 - Existing audio in Telegram
 
 Then you can:
@@ -25,6 +26,7 @@ Then you can:
 - Change title
 - Change performer
 - Change poster
+- Make the poster square
 - Change duration
 
 # Cookies

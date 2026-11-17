@@ -30,6 +30,10 @@ export class User {
         this.playlistId;
         /** @type {number | null} */
         this.menu;
+        /** @type {string[] | null} */
+        this.pending = null;
+        /** @type {number | null} */
+        this.confirm = null;
     }
 
     getAudio() {
@@ -116,7 +120,7 @@ export class User {
         }
         catch (error) {
             console.log(error);
-            if (Network.needsCookies(error)) this.decline(own ? "YouTube rejected your cookies. Send new cookies, see /cookies" : "YouTube blocked this request. Send your YouTube cookies to load this video, see /cookies");
+            if (Network.needsCookies(error)) this.decline(this.getBlockedText());
             else this.decline(`Failed to load: ${url}`);
             return false;
         }
@@ -152,7 +156,8 @@ export class User {
             if (audio.start || audio.end) await Files.cut(Files.path(source.path, source.file), audioPath, audio.start, duration);
             else Files.copy(Files.path(source.path, source.file), audioPath);
 
-            await Network.uploadFile(this.id, audioPath, {title: title, performer: audio.performer, duration: duration, thumbnail: audio.poster && {source: audio.poster == "default" ? Files.path(source.path, "poster.jpg") : this.getPosterPath()}});
+            var poster = audio.poster && await this.getPosterFile();
+            await Network.uploadFile(this.id, audioPath, {title: title, performer: audio.performer, duration: duration, thumbnail: poster && {source: poster}});
         }
         catch (error) {
             console.log(error);
@@ -245,9 +250,11 @@ export class User {
                 App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
                 var poster = audio.posterId;
                 if (audio.poster == "default") poster = audio.source.posterId ?? {source: Files.path(audio.source.path, "poster.jpg")};
-                var msg = await App.app.telegram.sendPhoto(this.id, poster, {...(audio.poster == "default" ? Menus.RemoveOnly : Menus.DefaultNRemove), caption: menuText});
+                if (audio.posterSquare) poster = {source: await this.getPosterFile()};
+                var markup = audio.poster == "default" ? (audio.posterSquare ? Menus.PosterDefaultSquare : Menus.PosterDefault) : (audio.posterSquare ? Menus.PosterCustomSquare : Menus.PosterCustom);
+                var msg = await App.app.telegram.sendPhoto(this.id, poster, {...markup, caption: menuText});
                 this.menu = msg.message_id;
-                if (audio.poster == "default" && !audio.source.posterId) {
+                if (audio.poster == "default" && !audio.source.posterId && !audio.posterSquare) {
                     audio.source.posterId = msg.photo.toReversed()[0].file_id;
                     Files.saveAudio(audio.source.path, audio.source);
                 }
@@ -301,6 +308,7 @@ export class User {
         var fileLink = await App.app.telegram.getFileLink(fileId).catch(() => null);
         if (!fileLink || !await Network.downloadImage(fileLink, this.getPosterPath()).catch(() => false)) return this.updateStatus("Failed to download poster");
         this.clearStatus();
+        Files.delete(this.getPosterPath().replace(/\.jpg$/, "-square.jpg"));
         this.setPoster(fileId);
         this.sendMenu("poster");
     }
@@ -367,6 +375,96 @@ export class User {
         this.statusMessage = null;
     }
 
+    /**
+     * @param {string[]} lists
+     * @param {string[]} urls
+     */
+    async parseLists(lists, urls) {
+        this.status = "loading";
+        this.removeConfirm();
+        this.updateStatus(`Fetching playlist: ${lists[0]}`);
+
+        try {
+            var ids = new Set(urls.map(url => Utility.getIdFromUrl(url)));
+            var title = null;
+            for (var list of lists) {
+                var playlist = await Utility.timeout(this.fetchList(list), Network.playlistTimeout, "Fetching playlist timed out");
+                if (lists.length == 1) title = playlist.title;
+                playlist.ids.forEach(id => ids.add(id));
+            }
+            if (ids.size == 0) return this.decline("No videos found");
+            if (!this.isAdmin() && ids.size > User.maxPlaylist) return this.decline(`Too many videos: ${ids.size}, send up to ${User.maxPlaylist} at once`);
+
+            this.pending = [...ids].map(id => `https://www.youtube.com/watch?v=${id}`);
+            var text = `${title ? `Playlist: \`${Utility.escapeCode(title)}\`\n` : ""}Videos: ${ids.size}\nThis may take a long time, confirm to load them all`;
+            this.clearStatus();
+            this.status = "none";
+            var msg = await App.app.telegram.sendMessage(this.id, text, Menus.Confirm);
+            this.confirm = msg.message_id;
+        }
+        catch (error) {
+            console.log(error);
+            this.decline(Network.needsCookies(error) ? this.getBlockedText() : `Failed to load: ${lists[0]}`);
+        }
+    }
+
+    /**
+     * @param {string} url
+     */
+    async fetchList(url) {
+        var own = this.hasCookies() ? this.getCookiesPath() : null;
+        try {
+            return await Network.fetchPlaylist(url);
+        }
+        catch (error) {
+            if (!own || !Network.needsCookies(error)) throw error;
+            return await Network.fetchPlaylist(url, own);
+        }
+    }
+
+    loadPending() {
+        if (!this.pending || this.status == "loading") return;
+        var urls = this.pending;
+        this.removeConfirm();
+        this.mode = "playlist";
+        this.playlist = urls.map(url => new Audio(url));
+        this.parsePlaylist();
+    }
+
+    removeConfirm() {
+        if (this.confirm) App.app.telegram.deleteMessage(this.id, this.confirm).catch(() => {});
+        this.confirm = null;
+        this.pending = null;
+    }
+
+    getBlockedText() {
+        return this.hasCookies() ? "YouTube rejected your cookies. Send new cookies, see /cookies" : "YouTube blocked this request. Send your YouTube cookies and try again, see /cookies";
+    }
+
+    async getPosterFile() {
+        var audio = this.getAudio();
+        var path = audio.poster == "default" ? Files.path(audio.source.path, "poster.jpg") : this.getPosterPath();
+        if (!audio.posterSquare) return path;
+        var squarePath = path.replace(/\.jpg$/, "-square.jpg");
+        if (!Files.exists(squarePath)) await Files.square(path, squarePath);
+        return squarePath;
+    }
+
+    async toggleSquare() {
+        var audio = this.getAudio();
+        if (this.status != "poster" || !audio.poster) return;
+        audio.posterSquare = !audio.posterSquare;
+        try {
+            if (audio.posterSquare) await this.getPosterFile();
+        }
+        catch (error) {
+            console.log(error);
+            audio.posterSquare = false;
+            return this.updateStatus("Failed to make the poster square");
+        }
+        this.sendMenu("poster");
+    }
+
     getSourcePath() {
         var source = this.getAudio()?.source;
         if (!source?.url) return;
@@ -402,7 +500,7 @@ export class User {
         info.text += `Title: \`${info.title}\`\n`;
         info.text += info.performer ? `Performer: \`${info.performer}\`\n` : "No performer\n";
         info.text += `Duration: \`${Utility.getDurationString(info.duration)}\`\n`;
-        info.text += info.poster ? `Poster: ${{"default": "Youtube", "custom": "Custom"}[info.poster]}` : "No poster";
+        info.text += info.poster ? `Poster: ${{"default": "Youtube", "custom": "Custom"}[info.poster]}${audio.posterSquare ? ", square" : ""}` : "No poster";
         if (info.start || info.end) info.text += `\nTrimming: \`${Utility.getDurationString(info.start ?? 0)}\` - \`${Utility.getDurationString(info.end ?? info.duration)}\``;
 
         return info;

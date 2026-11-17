@@ -216,7 +216,7 @@ export class Files {
         for (var user of this.list(this.path("downloads", "users"))) {
             for (var name of this.list(this.path("downloads", "users", user))) {
                 var path = this.path("downloads", "users", user, name);
-                if (/^poster\d*\.jpg$/.test(name) && now - fs.statSync(path).mtimeMs > maxAge) this.tryDelete(path);
+                if (/^poster\d*(-square)?\.jpg$/.test(name) && now - fs.statSync(path).mtimeMs > maxAge) this.tryDelete(path);
             }
         }
     }
@@ -229,5 +229,21 @@ export class Files {
      */
     static async cut(inputPath, outputPath, start, duration) {
         return await new Promise((resolve, reject) => ffmpeg(inputPath).setStartTime(start ?? 0).setDuration(duration).audioCodec("copy").on("end", resolve).on("error", reject).save(outputPath));
+    }
+
+    /**
+     * @param {string} inputPath
+     * @param {string} outputPath
+     */
+    static async square(inputPath, outputPath) {
+        var temp = outputPath.replace(/\.jpg$/, ".tmp.jpg");
+        try {
+            await new Promise((resolve, reject) => ffmpeg(inputPath).videoFilters("crop='min(iw,ih)':'min(iw,ih)'", "scale=320:320").outputOptions("-frames:v", "1", "-q:v", "3").on("end", resolve).on("error", reject).save(temp));
+        }
+        catch (error) {
+            this.tryDelete(temp);
+            throw error;
+        }
+        this.move(temp, outputPath);
     }
 }

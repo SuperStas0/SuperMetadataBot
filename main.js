@@ -6,13 +6,9 @@ import { Audio } from "./src/audio.js";
 import { Menus } from "./src/menus.js";
 import { Telegraf, Markup} from "telegraf";
 import filters from "telegraf/filters";
-import { TelegramClient, Api } from "telegram";
-import { StringSession } from "telegram/sessions/index.js";
 
 export class App {
     static app = new Telegraf(Files.config.botToken, {handlerTimeout: Infinity});
-
-    static userClient = new TelegramClient(new StringSession(Files.config.sessionId), Files.config.apiId, Files.config.apiHash, { connectionRetries: 5 });
 
     /** @type {Record<number, User>} */
     static data = {};
@@ -162,6 +158,24 @@ export class App {
             user.parseLink().then(() => user.sendMenu("new"));
         })
 
+        this.app.action("square", async ctx => {
+            ctx.answerCbQuery().catch(() => {});
+            var user = User.getUser(ctx);
+            user.toggleSquare();
+        })
+
+        this.app.action("playlistLoad", async ctx => {
+            ctx.answerCbQuery().catch(() => {});
+            var user = User.getUser(ctx);
+            user.loadPending();
+        })
+
+        this.app.action("playlistCancel", async ctx => {
+            ctx.answerCbQuery().catch(() => {});
+            var user = User.getUser(ctx);
+            user.removeConfirm();
+        })
+
         this.app.action("start", async ctx => {
             ctx.answerCbQuery().catch(() => {});
             var user = User.getUser(ctx);
@@ -197,7 +211,12 @@ export class App {
 
             if (user.status == "none" || user.status == "default") {
                 var urls = Utility.getUrls(ctx);
-                if (urls.length == 0) {
+                var lists = Utility.getPlaylistUrls(ctx);
+                if (lists.length > 0) {
+                    // Playlist
+                    user.parseLists(lists, urls);
+                }
+                else if (urls.length == 0) {
                     // Youtube search
                     return;
                 }
@@ -299,6 +318,7 @@ export class App {
      * @param {string} signal
      */
     static stop(signal) {
+        Network.dropUserClient();
         try {
             this.app.stop(signal);
         }

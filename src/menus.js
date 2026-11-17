@@ -31,4 +31,14 @@ export class Menus {
     static RemoveOnly = this.GenerateMarkup(["Remove", "null", 0], ["Cancel", "cancel", 1]);
 
     static DefaultNRemove = this.GenerateMarkup(["Set default", "default", 0], ["Remove", "null", 1], ["Cancel", "cancel", 2]);
+
+    static Confirm = this.GenerateMarkup(["Load all", "playlistLoad", 0], ["Cancel", "playlistCancel", 1]);
+
+    static PosterDefault = this.GenerateMarkup(["Make square", "square", 0], ["Remove", "null", 1], ["Cancel", "cancel", 2]);
+
+    static PosterDefaultSquare = this.GenerateMarkup(["Make original", "square", 0], ["Remove", "null", 1], ["Cancel", "cancel", 2]);
+
+    static PosterCustom = this.GenerateMarkup(["Make square", "square", 0], ["Set default", "default", 1], ["Remove", "null", 2], ["Cancel", "cancel", 3]);
+
+    static PosterCustomSquare = this.GenerateMarkup(["Make original", "square", 0], ["Set default", "default", 1], ["Remove", "null", 2], ["Cancel", "cancel", 3]);
 }
