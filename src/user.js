@@ -48,7 +48,21 @@ export class User {
         var url = audio.source.url;
         var path = this.getSourcePath();
         var admin = this.isAdmin();
+        var own = this.hasCookies() ? this.getCookiesPath() : null;
+        var cookies = null;
         var file;
+
+        var run = async task => {
+            var used = cookies;
+            try {
+                return await task(used);
+            }
+            catch (error) {
+                if (used || !own || !Network.isAgeRestricted(error)) throw error;
+                cookies = own;
+                return await task(cookies);
+            }
+        };
 
         if (!Files.list(path).some(name => name.endsWith(".m4a")) && Files.getFreeSpace() < Network.minFreeSpace) {
             App.clean(true);
@@ -63,7 +77,7 @@ export class User {
 
                 Files.createFolder(path);
                 if (!Files.exists(Files.path(path, "data.json"))) {
-                    var metadata = await Utility.timeout(Network.fetchInfo(url), Network.infoTimeout, "Fetching info timed out");
+                    var metadata = await Utility.timeout(run(used => Network.fetchInfo(url, used)), Network.infoTimeout, "Fetching info timed out");
                     if (metadata.is_live) throw new Error("Live streams are not supported");
                     if (metadata.duration > Network.maxDuration) throw new Error("Video is too long");
                     Files.saveAudio(path, Object.assign(new AudioSource(), {title: metadata.title, performer: metadata.channel, duration: metadata.duration || 0}));
@@ -79,9 +93,9 @@ export class User {
                 file = admin || Files.exists(best) && Files.getFileSize(best) < Network.botFileLimit ? "audio.m4a" : "audio-limited.m4a";
                 if (!Files.exists(Files.path(path, file))) {
                     this.updateStatus(`Downloading: ${url}`);
-                    tasks.push(Utility.queue("download", Network.maxDownloads, () => Utility.timeout(Network.downloadMusic(url, path, admin), Network.downloadTimeout, "Downloading timed out")).then(() => this.updateStatus(`Fetching: ${url}`)));
+                    tasks.push(Utility.queue("download", Network.maxDownloads, () => Utility.timeout(run(used => Network.downloadMusic(url, path, admin, used)), Network.downloadTimeout, "Downloading timed out")).then(() => this.updateStatus(`Fetching: ${url}`)));
                 }
-                if (!Files.exists(Files.path(path, "poster.jpg"))) tasks.push(Network.downloadPoster(url, path));
+                if (!Files.exists(Files.path(path, "poster.jpg"))) tasks.push(run(used => Network.downloadPoster(url, path, used)));
 
                 await Promise.all(tasks);
                 Files.touch(Files.path(path, file));
@@ -102,7 +116,8 @@ export class User {
         }
         catch (error) {
             console.log(error);
-            this.decline(`Failed to load: ${url}`);
+            if (Network.isAgeRestricted(error)) this.decline(own ? "This video is age restricted and your cookies did not work. Send new cookies, see /cookies" : "This video is age restricted. Send your YouTube cookies to load it, see /cookies");
+            else this.decline(`Failed to load: ${url}`);
             return false;
         }
         return true;
@@ -300,6 +315,45 @@ export class User {
     }
 
     /**
+     * @param {string} text
+     */
+    notify(text) {
+        return App.app.telegram.sendMessage(this.id, text).catch(() => {});
+    }
+
+    hasCookies() {
+        return Files.exists(this.getCookiesPath());
+    }
+
+    /**
+     * @param {{file_id: string, file_size?: number}} document
+     */
+    async setCookies(document) {
+        if (document.file_size > Network.cookiesFileLimit) return this.notify("Cookies file is too big");
+        try {
+            var link = await App.app.telegram.getFileLink(document.file_id);
+            var buffer = await Network.downloadFile(link, Network.cookiesFileLimit);
+            if (!buffer) return this.notify("Failed to download the cookies file");
+            var cookies = Utility.parseCookies(buffer.toString("utf8"));
+            if (!cookies) return this.notify("No YouTube cookies found in the file, send cookies.txt in Netscape format");
+            var path = this.getCookiesPath();
+            Files.write(`${path}.tmp`, cookies, 0o600);
+            Files.move(`${path}.tmp`, path);
+            this.notify("Cookies saved");
+        }
+        catch (error) {
+            console.log(error);
+            this.notify("Failed to save cookies");
+        }
+    }
+
+    removeCookies() {
+        if (!this.hasCookies()) return this.notify("No cookies saved");
+        Files.delete(this.getCookiesPath());
+        this.notify("Cookies removed");
+    }
+
+    /**
      * @param {string} message
      */
     updateStatus(message) {
@@ -321,6 +375,10 @@ export class User {
 
     getUserPath() {
         return Files.path("downloads", "users", this.id.toString());
+    }
+
+    getCookiesPath() {
+        return Files.path(this.getUserPath(), "cookies.txt");
     }
 
     getPosterPath() {

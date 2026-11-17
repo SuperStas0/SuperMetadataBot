@@ -179,6 +179,17 @@ export class App {
             ctx.reply(Files.helpText);
         })
 
+        this.app.command("cookies", async ctx => {
+            if (ctx.chat.type != "private") return;
+            var user = User.getUser(ctx);
+            ctx.reply(`Age restricted videos need a YouTube login.\nSend your YouTube cookies to this chat as a cookies.txt file in Netscape format. The file gives access to your account, use a secondary account.\nThe cookies are used only for your own requests and only when a video needs them. Only YouTube and Google cookies are kept.\nUse /removecookies to delete them.\nCookies: ${user.hasCookies() ? "saved" : "not saved"}`);
+        })
+
+        this.app.command("removecookies", async ctx => {
+            if (ctx.chat.type != "private") return;
+            User.getUser(ctx).removeCookies();
+        })
+
         this.app.on(filters.message("text"), async ctx => {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
@@ -250,6 +261,17 @@ export class App {
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
                 if (!photo) return user.updateStatus("Poster is too big");
                 user.setCustomPoster(photo.file_id);
+            }
+        })
+
+        this.app.on(filters.message("document"), async ctx => {
+            if (ctx.chat.type != "private") return;
+            var user = User.getUser(ctx);
+            var document = ctx.message.document;
+
+            if (document.file_name?.toLowerCase().endsWith(".txt")) {
+                ctx.deleteMessage(ctx.message.message_id).catch(() => {});
+                user.setCookies(document);
             }
         })
 

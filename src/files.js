@@ -30,9 +30,10 @@ export class Files {
     /**
      * @param {string} path
      * @param {string | Buffer} data
+     * @param {number} [mode]
      */
-    static write(path, data) {
-        fs.writeFileSync(path, data);
+    static write(path, data, mode) {
+        fs.writeFileSync(path, data, mode ? {mode: mode} : undefined);
     }
 
     /**
@@ -130,6 +131,14 @@ export class Files {
     }
 
     /**
+     * @param {string} inputPath
+     * @param {string} outputPath
+     */
+    static move(inputPath, outputPath) {
+        fs.renameSync(inputPath, outputPath);
+    }
+
+    /**
      * @param {string} path
      */
     static setFfmpegPath(path) {
@@ -152,7 +161,7 @@ export class Files {
         }
         for (var user of this.list(this.path("downloads", "users"))) {
             for (var name of this.list(this.path("downloads", "users", user))) {
-                if (name.endsWith(".m4a")) this.delete(this.path("downloads", "users", user, name));
+                if (name.endsWith(".m4a") || name == "cookies.txt.tmp") this.delete(this.path("downloads", "users", user, name));
             }
         }
     }

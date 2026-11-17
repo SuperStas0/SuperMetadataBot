@@ -3,13 +3,12 @@
 Telegram bot to download audio from YouTube and edit its metadata.
 
 # Installation
-1. Install Node.js 20 or newer.
+1. Install Node.js 22 or newer.
 2. Clone the repository: `git clone https://github.com/SuperStas0/SuperMetadata.git`
 3. Run `build.bat` (installs dependencies).
 4. Create a bot with [@BotFather](https://t.me/BotFather) and copy its API key.
 5. Run `node setup.js`, enter the bot's API key and the needed fields for your account.
 6. When asked for the 2FA code, enter the one you receive from Telegram.
-7. Optional, if YouTube asks to sign in: put your YouTube cookies in Netscape format into `static\cookies.txt`.
 
 # Usage
 Public instance: [@supermetadatabot](https://t.me/supermetadatabot). Hosting your own is recommended.
@@ -29,9 +28,16 @@ Then you can:
 - Change poster
 - Change duration
 
+# Cookies
+Some age restricted videos need a YouTube login. Cookies are used only for such videos and only the cookies of the user who sent the request.
+
+1. Export your YouTube cookies in Netscape format as `cookies.txt`.
+2. Send the file to the bot. Only YouTube and Google cookies are kept.
+3. Send `/removecookies` to delete them.
+
 # Building
 Requirements:
-- Node.js 20 or newer
+- Node.js 22 or newer
 
 Run `build.bat [-c] [-r] [-h]`. Flags combine in any order, e.g. `build.bat -cr`.
 

@@ -63,6 +63,20 @@ export class Utility {
     }
 
     /**
+     * @param {string} text
+     * @returns {string | null}
+     */
+    static parseCookies(text) {
+        var lines = [];
+        for (var line of text.split(/\r?\n/)) {
+            var fields = line.replace(/^#HttpOnly_/, "").split("\t");
+            if (fields.length != 7 || !/^(-?\d+(\.\d+)?)?$/.test(fields[4])) continue;
+            if (/^(.+\.)?(youtube|google)\.com$/.test(fields[0].replace(/^\./, "").toLowerCase())) lines.push(line);
+        }
+        return lines.length ? `# Netscape HTTP Cookie File\n${lines.join("\n")}\n` : null;
+    }
+
+    /**
      * @param {string} key
      * @param {() => Promise<void>} task
      */

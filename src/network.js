@@ -12,6 +12,8 @@ export class Network {
 
     static posterFileLimit = 200 * 1024;
 
+    static cookiesFileLimit = 2 * 1024 * 1024;
+
     static largeQueue = Promise.resolve();
 
     static maxDuration = 4 * 60 * 60;
@@ -44,13 +46,29 @@ export class Network {
 
     /**
      * @param {string} url
+     * @param {number} sizeLimit
+     * @returns {Promise<Buffer | null>}
      */
+    static async downloadFile(url, sizeLimit) {
+        var response = await fetch(url, {signal: AbortSignal.timeout(15 * 1000)});
+        if (!response.ok) return null;
+        var buffer = Buffer.from(await response.arrayBuffer());
+        return buffer.length <= sizeLimit ? buffer : null;
+    }
+
     /**
+     * @param {any} error
+     */
+    static isAgeRestricted(error) {
+        return /confirm your age|age-restricted|inappropriate|age_verification_required|age_check_required/i.test(error?.message ?? "");
+    }
+
+    /**
+     * @param {string | null} source
      * @param {(cookies?: string) => Promise<any>} task
      */
-    static async withCookies(task) {
-        var source = Files.path("static", "cookies.txt");
-        if (!Files.exists(source)) return await task();
+    static async withCookies(source, task) {
+        if (!source) return await task();
         var copy = Files.path("downloads", `cookies-${Math.random().toString(36).slice(2)}.txt`);
         Files.createFolder("downloads");
         Files.copy(source, copy);
@@ -64,31 +82,34 @@ export class Network {
 
     /**
      * @param {string} url
+     * @param {string | null} [cookies]
      */
-    static fetchInfo(url) {
-        return this.withCookies(cookies => this.ytdlp.getInfoAsync(url, {cookies: cookies}));
+    static fetchInfo(url, cookies) {
+        return this.withCookies(cookies, copy => this.ytdlp.getInfoAsync(url, {cookies: copy}));
     }
 
     /**
      * @param {string} url
      * @param {string} path
      * @param {boolean | null} allowLarge
+     * @param {string | null} [cookies]
      */
-    static downloadMusic(url, path, allowLarge) {
+    static downloadMusic(url, path, allowLarge, cookies) {
         var settings = {
             format: allowLarge ? { filter: "audioonly", type: "m4a", quality: "highest" } : "bestaudio[ext=m4a][filesize<50M]/bestaudio[filesize<50M]/worstaudio",
             output: Files.path(path, allowLarge ? "audio.m4a" : "audio-limited.m4a"),
             noPlaylist: true
         }
-        return this.withCookies(cookies => this.ytdlp.downloadAsync(url, {...settings, cookies: cookies}));
+        return this.withCookies(cookies, copy => this.ytdlp.downloadAsync(url, {...settings, cookies: copy}));
     }
 
     /**
      * @param {string} url
      * @param {string} path
+     * @param {string | null} [cookies]
      */
-    static async downloadPoster(url, path) {
-        for (var posterUrl of (await this.fetchInfo(url)).thumbnails.reverse().map(el => el.url)) {
+    static async downloadPoster(url, path, cookies) {
+        for (var posterUrl of (await this.fetchInfo(url, cookies)).thumbnails.reverse().map(el => el.url)) {
             if (!posterUrl.includes(".jpg") || posterUrl.includes(".webp")) continue;
             if (await this.downloadImage(posterUrl, Files.path(path, "poster.jpg"), this.posterFileLimit)) return Promise.resolve();
         }
