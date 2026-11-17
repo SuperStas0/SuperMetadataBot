@@ -50,7 +50,7 @@ export class App {
 
         this.app.start(async ctx => {
             if (ctx.chat.type != "private") return ctx.reply("Sorry, bot only works in DMs");
-            ctx.reply("Hello\nThis bot is meant to download and edit audio\nFor full usage instructions use /help");
+            ctx.reply(Files.startText);
         })
 
         this.app.action("send", async ctx => {

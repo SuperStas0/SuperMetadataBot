@@ -116,7 +116,7 @@ export class User {
         }
         catch (error) {
             console.log(error);
-            if (Network.needsCookies(error)) this.decline(own ? "YouTube rejected your cookies. Send new cookies, see /cookies" : "YouTube requires a login for this video. Send your YouTube cookies to load it, see /cookies");
+            if (Network.needsCookies(error)) this.decline(own ? "YouTube rejected your cookies. Send new cookies, see /cookies" : "YouTube blocked this request. Send your YouTube cookies to load this video, see /cookies");
             else this.decline(`Failed to load: ${url}`);
             return false;
         }

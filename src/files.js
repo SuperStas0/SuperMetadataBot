@@ -13,6 +13,9 @@ export class Files {
     }
 
     /** @type {string} */
+    static startText = this.read("static", "start.md");
+
+    /** @type {string} */
     static helpText = this.read("static", "help.md");
 
     /**
