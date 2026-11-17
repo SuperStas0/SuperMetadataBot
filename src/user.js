@@ -11,6 +11,12 @@ export class User {
 
     static maxPlaylist = 10;
 
+    static maxCuts = 10;
+
+    static maxSuggestions = 8;
+
+    static categoryNames = {sponsor: "Sponsor", selfpromo: "Self promotion", interaction: "Interaction reminder", intro: "Intro", outro: "Outro", preview: "Preview", music_offtopic: "Non-music", filler: "Filler"};
+
     /**
      * @param {Context} ctx
      */
@@ -145,7 +151,7 @@ export class User {
         var title = audio.title ?? source.title;
         var path = this.getUserPath();
         var audioPath = Files.path(path, `${Utility.getFileName(title)}.m4a`);
-        var duration = Utility.getDuration(source.duration, audio.start, audio.end);
+        var duration = Utility.getDuration(source.duration, audio.cuts);
 
         this.status = "loading";
         this.updateStatus(`Uploading: ${title}`);
@@ -153,7 +159,7 @@ export class User {
         this.menu = null;
 
         try {
-            if (audio.start || audio.end) await Files.cut(Files.path(source.path, source.file), audioPath, audio.start, duration);
+            if (audio.cuts.length) await Files.cut(Files.path(source.path, source.file), audioPath, Utility.getKept(audio.cuts, source.duration));
             else Files.copy(Files.path(source.path, source.file), audioPath);
 
             var poster = audio.poster && await this.getPosterFile();
@@ -216,7 +222,7 @@ export class User {
     }
 
     /**
-     * @param {"new" | "default" | "title" | "performer" | "poster" | "start" | "end"} [mode]
+     * @param {"new" | "default" | "title" | "performer" | "poster" | "cuts"} [mode]
      */
     async sendMenu(mode) {
         if (this.status == "loading" || this.status == "none") return;
@@ -224,6 +230,10 @@ export class User {
 
         this.clearStatus();
         var audio = this.getAudio();
+        if (mode == "cuts") {
+            await this.loadSegments();
+            if (this.status == "loading" || this.status == "none") return;
+        }
         var menuText = this.getMenuText(mode).replaceAll(".", "\\.").replaceAll("-", "\\-");
         this.status = mode;
 
@@ -271,7 +281,56 @@ export class User {
                 }
             }
         }
-        else if (mode == "start" || mode == "end") this.editMenu(menuText, Menus.DefaultOnly);
+        else if (mode == "cuts") this.editMenu(menuText, Menus.GenerateCuts(this.getSuggestions().length, audio.cuts.length));
+    }
+
+    async loadSegments() {
+        var source = this.getAudio().source;
+        if (source.segments) return;
+        var id = source.url && Utility.getIdFromUrl(source.url);
+        try {
+            source.segments = id ? await Network.fetchSegments(id, source.duration) : [];
+        }
+        catch (error) {
+            console.log(error);
+            source.segments = [];
+        }
+    }
+
+    getSuggestions() {
+        var audio = this.getAudio();
+        return (audio.source.segments ?? []).filter(segment => !audio.cuts.some(([start, end]) => start <= segment.start && end >= segment.end)).slice(0, User.maxSuggestions);
+    }
+
+    /**
+     * @param {Cut[]} cuts
+     */
+    applyCuts(cuts) {
+        if (this.status != "cuts") return;
+        var audio = this.getAudio();
+        var merged = Utility.mergeCuts(cuts);
+        if (merged.length > User.maxCuts) return this.updateStatus(`Too many cuts, up to ${User.maxCuts} are allowed`);
+        if (!Utility.getKept(merged, audio.source.duration).length) return this.updateStatus("Cuts cannot cover the whole audio");
+        audio.cuts = merged;
+        this.clearStatus();
+        this.sendMenu("cuts");
+    }
+
+    /**
+     * @param {number | null} index
+     */
+    addSuggested(index) {
+        var suggestions = this.getSuggestions();
+        var chosen = index == null ? suggestions : suggestions.slice(index, index + 1);
+        if (this.status != "cuts" || !chosen.length) return;
+        this.applyCuts([...this.getAudio().cuts, ...chosen.map(segment => [segment.start, segment.end])]);
+    }
+
+    /**
+     * @param {number} index
+     */
+    removeCut(index) {
+        this.applyCuts(this.getAudio().cuts.filter((_, position) => position != index));
     }
 
     /**
@@ -492,8 +551,7 @@ export class User {
         info.performer = Utility.escapeCode(audio.performer);
         info.duration = audio.source.duration;
         info.poster = audio.poster;
-        info.start = audio.start;
-        info.end = audio.end;
+        info.cuts = audio.cuts;
 
         info.text = "";
         if (this.mode == "playlist") info.text += `\`${this.playlistId+1}/${this.playlist.length}\`\n`;
@@ -501,14 +559,14 @@ export class User {
         info.text += info.performer ? `Performer: \`${info.performer}\`\n` : "No performer\n";
         info.text += `Duration: \`${Utility.getDurationString(info.duration)}\`\n`;
         info.text += info.poster ? `Poster: ${{"default": "Youtube", "custom": "Custom"}[info.poster]}${audio.posterSquare ? ", square" : ""}` : "No poster";
-        if (info.start || info.end) info.text += `\nTrimming: \`${Utility.getDurationString(info.start ?? 0)}\` - \`${Utility.getDurationString(info.end ?? info.duration)}\``;
+        if (info.cuts.length) info.text += `\nCuts: ${info.cuts.length}, new duration \`${Utility.getDurationString(Utility.getDuration(info.duration, info.cuts))}\``;
 
         return info;
 
     }
 
     /**
-     * @param {"new" | "default" | "title" | "performer" | "poster" | "start" | "end"} mode
+     * @param {"new" | "default" | "title" | "performer" | "poster" | "cuts"} mode
      */
     getMenuText(mode) {
         var info = this.getInfo();
@@ -516,7 +574,16 @@ export class User {
         if (mode == "title") return `Current title: \`${info.title}\`\nSend new title`;
         if (mode == "performer") return info.performer ? `Current performer: \`${info.performer}\`\nSend new performer` : `Currently no performer\nSend new performer`;
         if (mode == "poster") return info.poster ? `Current poster\nSend new poster` : `Currently no poster\nSend new poster`;
-        if (mode == "start" || mode == "end") return (info.start || info.end) ? `Trimming: \`${Utility.getDurationString(info.start ?? 0)}\` - \`${Utility.getDurationString(info.end ?? info.duration)}\`\nSend new trim ${mode} timecode as \`MM:SS\`\n` : `Trimming is not set\nSend trim ${mode} timecode as \`MM:SS\``;
+        if (mode == "cuts") {
+            var format = ([start, end]) => `\`${Utility.getDurationString(start)}\` - \`${Utility.getDurationString(end)}\``;
+            var suggestions = this.getSuggestions();
+            var lines = [info.cuts.length ? "Cuts:" : "No cuts"];
+            info.cuts.forEach((cut, index) => lines.push(`${index + 1}. ${format(cut)}`));
+            if (suggestions.length) lines.push("Suggested by SponsorBlock:");
+            suggestions.forEach((segment, index) => lines.push(`${index + 1}. ${format([segment.start, segment.end])} ${User.categoryNames[segment.category]}`));
+            lines.push("Send a range to cut out, for example 1:30 - 2:45, one range per line. Use start and end for the edges of the audio");
+            return lines.join("\n");
+        }
     }
 
     /**

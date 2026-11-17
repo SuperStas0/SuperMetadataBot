@@ -9,7 +9,8 @@ Loaded audio is cached on the server, repeated links load faster.
 *Menu*
 *Title* - send the new title, up to 256 characters
 *Performer* - send the new performer, up to 256 characters. _Set default_ restores the YouTube channel name, _Remove_ clears it
-*Start* and *End* - trim the audio, send the timecode as `seconds`, `MM:SS` or `HH:MM:SS`. Start must be before End and both must be inside the duration. _Set default_ removes the limit
+*Cuts* - cut out parts of the audio, in the middle too. Send a range as `start - end`, for example `1:30 - 2:45`, one range per line, timecodes as `seconds`, `MM:SS` or `HH:MM:SS`. `start` and `end` stand for the edges of the audio. Up to 10 cuts, overlapping ones are merged. _Remove 1_, _Remove 2_ and so on delete a single cut, _Clear all_ deletes all of them
+*Suggestions* - the Cuts menu lists sponsor, self promotion, intro, outro and similar segments from SponsorBlock. _Add 1_, _Add 2_ and so on add one, _Add all_ adds all of them. The video id is sent to sponsor.ajay.app when the Cuts menu opens
 *Poster* - send a photo to use as the poster. _Set default_ restores the YouTube thumbnail, _Remove_ clears it, _Make square_ crops it from the middle to 1:1 and _Make original_ undoes that
 *Send* - send the edited audio
 *Cancel* - go back to the main menu
@@ -19,7 +20,7 @@ The messages you send to change a value are deleted after they are applied.
 *Batch*
 *Previous* and *Next* switch between the loaded audios, each one is edited separately.
 *Send All* sends every audio of the batch.
-*Start*, *End* and *Delete* are not available for a batch.
+*Delete* is not available for a batch. *Cuts* are set separately for each audio.
 
 *Commands*
 /start - basic information

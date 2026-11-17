@@ -12,11 +12,8 @@ export class Audio {
         /** @type {string | null} */
         this.performer = null;
 
-        /** @type {number | null} */
-        this.start = null;
-
-        /** @type {number | null} */
-        this.end = null;
+        /** @type {Cut[]} */
+        this.cuts = [];
 
         /** @type {PosterMode} */
         this.poster = null;
@@ -60,5 +57,8 @@ export class AudioSource {
 
         /** @type {string} */
         this.file = "audio.m4a";
+
+        /** @type {Segment[] | null} */
+        this.segments = null;
     }
 }

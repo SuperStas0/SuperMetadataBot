@@ -16,9 +16,30 @@ export class Menus {
 
     static Simple = {parse_mode: "MarkdownV2", link_preview_options: {is_disabled: true}};
 
-    static Main = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Start", "start", 2], ["End", "end", 2], ["Poster", "poster", 3], ["Delete", "delete", 4]);
+    static Main = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2], ["Delete", "delete", 3]);
 
-    static Playlist = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Poster", "poster", 2], ["Previous", "prev", 3], ["Next", "next", 3], ["Send All", "sendAll", 4]);
+    static Playlist = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2], ["Previous", "prev", 3], ["Next", "next", 3], ["Send All", "sendAll", 4]);
+
+    /**
+     * @param {number} suggestions
+     * @param {number} cuts
+     */
+    static GenerateCuts(suggestions, cuts) {
+        var buttons = [];
+        var row = -1;
+        for (var index = 0; index < suggestions; index++) {
+            if (index % 4 == 0) row++;
+            buttons.push([`Add ${index + 1}`, `cutAdd:${index}`, row]);
+        }
+        if (suggestions > 1) buttons.push(["Add all", "cutsAddAll", ++row]);
+        for (var index = 0; index < cuts; index++) {
+            if (index % 4 == 0) row++;
+            buttons.push([`Remove ${index + 1}`, `cutRemove:${index}`, row]);
+        }
+        if (cuts) buttons.push(["Clear all", "cutsClear", ++row]);
+        buttons.push(["Done", "cancel", ++row]);
+        return this.GenerateMarkup(...buttons);
+    }
 
     static Cancel = this.GenerateMarkup(["Cancel", "cancel", 0]);
 

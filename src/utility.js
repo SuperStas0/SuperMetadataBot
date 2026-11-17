@@ -7,13 +7,61 @@ export class Utility {
 
     /**
      * @param {number} duration
-     * @param {number | null} start
-     * @param {number | null} end
+     * @param {Cut[]} cuts
      */
-    static getDuration(duration, start, end) {
-        start ??= 0;
-        end ??= duration;
-        return end-start;
+    static getDuration(duration, cuts) {
+        return duration - cuts.reduce((total, [start, end]) => total + end - start, 0);
+    }
+
+    /**
+     * @param {Cut[]} cuts
+     * @returns {Cut[]}
+     */
+    static mergeCuts(cuts) {
+        var merged = [];
+        for (var [start, end] of cuts.toSorted((first, second) => first[0] - second[0])) {
+            var last = merged[merged.length - 1];
+            if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+            else merged.push([start, end]);
+        }
+        return merged;
+    }
+
+    /**
+     * @param {Cut[]} cuts merged cuts
+     * @param {number} duration
+     * @returns {[number, number | null][]} parts to keep, null end means the end of the file
+     */
+    static getKept(cuts, duration) {
+        var kept = [];
+        var position = 0;
+        for (var [start, end] of cuts) {
+            if (start > position) kept.push([position, start]);
+            position = end;
+        }
+        if (position < duration) kept.push([position, null]);
+        return kept;
+    }
+
+    /**
+     * @param {string} text
+     * @param {number} duration
+     * @returns {{cuts?: Cut[], error?: string}}
+     */
+    static parseCuts(text, duration) {
+        var cuts = [];
+        for (var part of text.split(/[\n,;]+/)) {
+            part = part.trim();
+            if (!part) continue;
+            var sides = part.split("-").map(side => side.trim().toLowerCase());
+            var start = sides[0] == "start" ? 0 : this.parseTimecode(sides[0]);
+            var end = sides[1] == "end" ? duration : this.parseTimecode(sides[1] ?? "");
+            if (sides.length != 2 || start == null || end == null) return {error: `Incorrect format: ${part}`};
+            if (start >= end) return {error: `Start must be before end: ${part}`};
+            if (end > duration) return {error: `Beyond the duration ${this.getDurationString(duration)}: ${part}`};
+            cuts.push([start, end]);
+        }
+        return cuts.length ? {cuts: cuts} : {error: "Incorrect format"};
     }
 
     /**

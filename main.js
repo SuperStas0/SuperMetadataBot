@@ -90,17 +90,6 @@ export class App {
                 user.sendMenu("default");
                 return;
             }
-            if (user.status == "start") {
-                user.audio.start = null;
-                user.sendMenu("default");
-                return;
-            }
-            if (user.status == "end") {
-                user.audio.end = null;
-                user.sendMenu("default");
-                return;
-            }
-
         })
 
         this.app.action("cancel", async ctx => {
@@ -176,18 +165,31 @@ export class App {
             user.removeConfirm();
         })
 
-        this.app.action("start", async ctx => {
+        this.app.action("cuts", async ctx => {
             ctx.answerCbQuery().catch(() => {});
             var user = User.getUser(ctx);
-            if (user.mode == "playlist") return;
-            user.sendMenu("start");
+            if (user.status != "default") return;
+            user.sendMenu("cuts");
         })
 
-        this.app.action("end", async ctx => {
+        this.app.action(/^cutAdd:(\d+)$/, async ctx => {
             ctx.answerCbQuery().catch(() => {});
-            var user = User.getUser(ctx);
-            if (user.mode == "playlist") return;
-            user.sendMenu("end");
+            User.getUser(ctx).addSuggested(Number(ctx.match[1]));
+        })
+
+        this.app.action("cutsAddAll", async ctx => {
+            ctx.answerCbQuery().catch(() => {});
+            User.getUser(ctx).addSuggested(null);
+        })
+
+        this.app.action(/^cutRemove:(\d+)$/, async ctx => {
+            ctx.answerCbQuery().catch(() => {});
+            User.getUser(ctx).removeCut(Number(ctx.match[1]));
+        })
+
+        this.app.action("cutsClear", async ctx => {
+            ctx.answerCbQuery().catch(() => {});
+            User.getUser(ctx).applyCuts([]);
         })
 
         this.app.command("help", async ctx => {
@@ -250,25 +252,11 @@ export class App {
                 user.sendMenu("default");
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
             }
-            else if (user.status == "start") {
-                var seconds = Utility.parseTimecode(ctx.message.text);
-                if (seconds == null) return user.updateStatus("Incorrect format");
-                if (seconds >= user.audio.source.duration) return user.updateStatus("Start timecode cannot be more than total duration");
-                if (user.audio.end && seconds >= user.audio.end) return user.updateStatus("Start timecode cannot be more than end timecode");
-                user.clearStatus();
-                user.audio.start = seconds;
+            else if (user.status == "cuts") {
+                var parsed = Utility.parseCuts(ctx.message.text, user.getAudio().source.duration);
+                if (parsed.error) return user.updateStatus(parsed.error);
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
-                user.sendMenu("default");
-            }
-            else if (user.status == "end") {
-                var seconds = Utility.parseTimecode(ctx.message.text);
-                if (seconds == null) return user.updateStatus("Incorrect format");
-                if (seconds >= user.audio.source.duration) return user.updateStatus("End timecode cannot be more than total duration");
-                if (seconds <= (user.audio.start ?? 0)) return user.updateStatus("End timecode must be more than start timecode");
-                user.clearStatus();
-                user.audio.end = seconds;
-                ctx.deleteMessage(ctx.message.message_id).catch(() => {});
-                user.sendMenu("default");
+                user.applyCuts([...user.getAudio().cuts, ...parsed.cuts]);
             }
         })
 

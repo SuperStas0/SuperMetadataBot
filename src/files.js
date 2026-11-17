@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { join } from "path";
+import { join, resolve as resolvePath } from "path";
 import ffmpeg from "fluent-ffmpeg";
 import { AudioSource } from "./audio.js";
 import { Utility } from "./utility.js";
@@ -168,7 +168,7 @@ export class Files {
         }
         for (var user of this.list(this.path("downloads", "users"))) {
             for (var name of this.list(this.path("downloads", "users", user))) {
-                if (name.endsWith(".m4a") || name == "cookies.txt.tmp") this.delete(this.path("downloads", "users", user, name));
+                if (name.endsWith(".m4a") || name.endsWith(".m4a.txt") || name == "cookies.txt.tmp") this.delete(this.path("downloads", "users", user, name));
             }
         }
     }
@@ -224,11 +224,27 @@ export class Files {
     /**
      * @param {string} inputPath
      * @param {string} outputPath
-     * @param {number} start
-     * @param {number} duration
+     * @param {[number, number | null][]} parts
      */
-    static async cut(inputPath, outputPath, start, duration) {
-        return await new Promise((resolve, reject) => ffmpeg(inputPath).setStartTime(start ?? 0).setDuration(duration).audioCodec("copy").on("end", resolve).on("error", reject).save(outputPath));
+    static async cut(inputPath, outputPath, parts) {
+        if (parts.length == 1) {
+            var [start, end] = parts[0];
+            return await new Promise((resolve, reject) => {
+                var command = ffmpeg(inputPath).setStartTime(start);
+                if (end != null) command.setDuration(end - start);
+                command.audioCodec("copy").on("end", resolve).on("error", reject).save(outputPath);
+            })
+        }
+        var listPath = `${outputPath}.txt`;
+        var source = resolvePath(inputPath).replaceAll("\\", "/").replaceAll("'", "'\\''");
+        var lines = parts.flatMap(([start, end]) => [`file '${source}'`, `inpoint ${start}`, ...(end == null ? [] : [`outpoint ${end}`])]);
+        this.write(listPath, `${lines.join("\n")}\n`);
+        try {
+            await new Promise((resolve, reject) => ffmpeg(listPath).inputOptions("-f", "concat", "-safe", "0").audioCodec("copy").on("end", resolve).on("error", reject).save(outputPath));
+        }
+        finally {
+            this.tryDelete(listPath);
+        }
     }
 
     /**

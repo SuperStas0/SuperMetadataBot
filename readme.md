@@ -22,7 +22,7 @@ Load audio into the bot by any of:
 - Existing audio in Telegram
 
 Then you can:
-- Trim
+- Cut out parts of the audio, with suggestions from SponsorBlock
 - Change title
 - Change performer
 - Change poster

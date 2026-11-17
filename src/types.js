@@ -1,8 +1,12 @@
-/** @typedef {"none" | "loading" | "default" | "title" | "performer" | "poster" | "start" | "end"} UserStatus */
+/** @typedef {"none" | "loading" | "default" | "title" | "performer" | "poster" | "cuts"} UserStatus */
 
 /** @typedef {"none" | "youtube" | "telegram" | "playlist"} UserMode */
 
 /** @typedef {"default" | "custom" | null} PosterMode */
+
+/** @typedef {[number, number]} Cut */
+
+/** @typedef {{start: number, end: number, category: string}} Segment */
 
 /** @typedef {Record<string, number | string>} ConfigFile */
 

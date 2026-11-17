@@ -37,6 +37,10 @@ export class Network {
 
     static downloadTimeout = 30 * 60 * 1000;
 
+    static sponsorBlockUrl = "https://sponsor.ajay.app";
+
+    static segmentCategories = ["sponsor", "selfpromo", "interaction", "intro", "outro", "preview", "music_offtopic", "filler"];
+
     static {
         dns.setDefaultResultOrder("ipv4first");
     }
@@ -106,6 +110,28 @@ export class Network {
     static async fetchPlaylist(url, cookies) {
         var info = await this.fetchInfo(url, cookies);
         return {title: info.title, ids: (info.entries ?? []).map(entry => entry?.id).filter(id => /^[A-Za-z0-9_-]{11}$/.test(id))};
+    }
+
+    /**
+     * @param {string} id
+     * @param {number} duration
+     * @returns {Promise<Segment[]>}
+     */
+    static async fetchSegments(id, duration) {
+        var query = new URLSearchParams({videoID: id, categories: JSON.stringify(this.segmentCategories), actionTypes: JSON.stringify(["skip"])});
+        var response = await fetch(`${this.sponsorBlockUrl}/api/skipSegments?${query}`, {signal: AbortSignal.timeout(10 * 1000)});
+        if (response.status == 404) return [];
+        if (!response.ok) throw new Error(`SponsorBlock responded with ${response.status}`);
+        var segments = [];
+        for (var item of await response.json()) {
+            if (!Array.isArray(item.segment) || !this.segmentCategories.includes(item.category) || (item.votes ?? 0) < 0) continue;
+            if (item.videoDuration && Math.abs(item.videoDuration - duration) > 2) continue;
+            if (item.segment[1] - item.segment[0] < 1) continue;
+            var start = Math.max(0, Math.round(item.segment[0]));
+            var end = Math.min(duration, Math.round(item.segment[1]));
+            if (end - start >= 1) segments.push({start: start, end: end, category: item.category});
+        }
+        return segments.sort((first, second) => first.start - second.start);
     }
 
     /**
