@@ -59,8 +59,8 @@ export class Network {
     /**
      * @param {any} error
      */
-    static isAgeRestricted(error) {
-        return /confirm your age|age-restricted|inappropriate|age_verification_required|age_check_required/i.test(error?.message ?? "");
+    static needsCookies(error) {
+        return /not a bot|confirm your age|age-restricted|inappropriate|age_verification_required|age_check_required/i.test(error?.message ?? "");
     }
 
     /**

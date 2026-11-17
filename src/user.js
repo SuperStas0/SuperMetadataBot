@@ -58,7 +58,7 @@ export class User {
                 return await task(used);
             }
             catch (error) {
-                if (used || !own || !Network.isAgeRestricted(error)) throw error;
+                if (used || !own || !Network.needsCookies(error)) throw error;
                 cookies = own;
                 return await task(cookies);
             }
@@ -116,7 +116,7 @@ export class User {
         }
         catch (error) {
             console.log(error);
-            if (Network.isAgeRestricted(error)) this.decline(own ? "This video is age restricted and your cookies did not work. Send new cookies, see /cookies" : "This video is age restricted. Send your YouTube cookies to load it, see /cookies");
+            if (Network.needsCookies(error)) this.decline(own ? "YouTube rejected your cookies. Send new cookies, see /cookies" : "YouTube requires a login for this video. Send your YouTube cookies to load it, see /cookies");
             else this.decline(`Failed to load: ${url}`);
             return false;
         }

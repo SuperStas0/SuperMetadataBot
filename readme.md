@@ -29,7 +29,7 @@ Then you can:
 - Change duration
 
 # Cookies
-Some age restricted videos need a YouTube login. Cookies are used only for such videos and only the cookies of the user who sent the request.
+Some videos need a YouTube login: age restricted ones, and any video when YouTube blocks the server as a bot. Cookies are used only for such videos and only the cookies of the user who sent the request.
 
 1. Export your YouTube cookies in Netscape format as `cookies.txt`.
 2. Send the file to the bot. Only YouTube and Google cookies are kept.

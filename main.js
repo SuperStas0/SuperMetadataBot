@@ -182,7 +182,7 @@ export class App {
         this.app.command("cookies", async ctx => {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
-            ctx.reply(`Age restricted videos need a YouTube login.\nSend your YouTube cookies to this chat as a cookies.txt file in Netscape format. The file gives access to your account, use a secondary account.\nThe cookies are used only for your own requests and only when a video needs them. Only YouTube and Google cookies are kept.\nUse /removecookies to delete them.\nCookies: ${user.hasCookies() ? "saved" : "not saved"}`);
+            ctx.reply(`YouTube asks for a login on age restricted videos and when it blocks the server as a bot.\nSend your YouTube cookies to this chat as a cookies.txt file in Netscape format. The file gives access to your account, use a secondary account.\nThe cookies are used only for your own requests and only when a video needs them. Only YouTube and Google cookies are kept.\nUse /removecookies to delete them.\nCookies: ${user.hasCookies() ? "saved" : "not saved"}`);
         })
 
         this.app.command("removecookies", async ctx => {
