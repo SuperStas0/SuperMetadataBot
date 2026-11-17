@@ -130,7 +130,9 @@ export class User {
                 return sent ? this.decline() : this.decline(`This audio is over the ${Network.botFileLimit / 1024 / 1024} MB limit of this bot. Host your own bot to remove the limit: https://github.com/SuperStas0/SuperMetadata`);
             }
             this.clearStatus();
+            var segments = this.mode == "playlist" ? null : this.loadSegments();
             await this.sendSource();
+            if (segments && await segments) this.notify(audio.source.segments.length ? `SponsorBlock: ${audio.source.segments.length} segments found, see Cuts` : "SponsorBlock: no segments found");
             this.status = "default";
         }
         catch (error) {
@@ -475,16 +477,20 @@ export class User {
         else if (mode == "cuts") this.editMenu(menuText, Menus.GenerateCuts(this.getSuggestions().length, audio.cuts.length));
     }
 
+    /**
+     * @returns {Promise<boolean>}
+     */
     async loadSegments() {
         var source = this.getAudio().source;
-        if (source.segments) return;
+        if (source.segments) return true;
         var id = source.url && Utility.getIdFromUrl(source.url);
         try {
             source.segments = id ? await Network.fetchSegments(id, source.duration) : [];
+            return true;
         }
         catch (error) {
             console.log(error);
-            source.segments = [];
+            return false;
         }
     }
 
@@ -547,10 +553,14 @@ export class User {
     setPoster(mode) {
         var audio = this.getAudio();
         if (!mode) audio.poster = null;
-        else if (mode == "default") audio.poster = "default";
+        else if (mode == "default") {
+            audio.poster = "default";
+            audio.posterSquare = this.mode != "telegram";
+        }
         else {
             audio.poster = "custom";
             audio.posterId = mode;
+            audio.posterSquare = false;
         }
 
     }

@@ -13,7 +13,7 @@ Loaded audio is cached on the server, repeated links load faster.
 *Performer* - send the new performer, up to 256 characters. _Set default_ restores the YouTube channel name, _Remove_ clears it
 *Cuts* - cut out parts of the audio, in the middle too. Send a range as `start - end`, for example `1:30 - 2:45`, one range per line, timecodes as `seconds`, `MM:SS` or `HH:MM:SS`. Leave a side empty for the edge of the audio, `1:30 -` cuts to the end and `- 2:45` from the start, `start` and `end` work too. A time after the end snaps to the end. Up to 10 cuts, overlapping ones are merged. _Remove 1_, _Remove 2_ and so on delete a single cut, _Clear all_ deletes all of them
 *Suggestions* - the Cuts menu lists sponsor, self promotion, intro, outro and similar segments from SponsorBlock. _Add 1_, _Add 2_ and so on add one, _Add all_ adds all of them. The video id is sent to sponsor.ajay.app when the Cuts menu opens
-*Poster* - send a photo to use as the poster. _Set default_ restores the YouTube thumbnail, _Remove_ clears it, _Make square_ crops it from the middle to 1:1 and _Make original_ undoes that
+*Poster* - send a photo to use as the poster. _Set default_ restores the YouTube thumbnail, _Remove_ clears it, _Make square_ crops it from the middle to 1:1 and _Make original_ undoes that. The YouTube thumbnail is square by default
 *Send* - send the edited audio
 *Back* - go back to the main menu. In the search results and the playlist confirmation *Cancel* closes the message
 *Delete* - admin only, deletes the loaded audio from the server and loads it again. Not available for sent files
