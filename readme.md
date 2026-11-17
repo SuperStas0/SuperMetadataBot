@@ -16,10 +16,10 @@ Public instance: [@supermetadatabot](https://t.me/supermetadatabot). Hosting you
 2. Send `/start` to the bot.
 
 Load audio into the bot by any of:
-- Built-in YouTube search
+- Built-in YouTube search: `/search query`, first 5 results sorted by views
 - YouTube video link
 - YouTube playlist link (asks for confirmation first)
-- Existing audio in Telegram
+- Audio or music file sent to the bot, up to 20 MB
 
 Then you can:
 - Cut out parts of the audio, with suggestions from SponsorBlock

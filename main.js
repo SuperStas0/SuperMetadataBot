@@ -81,6 +81,7 @@ export class App {
             ctx.answerCbQuery().catch(() => {});
             var user = User.getUser(ctx);
             if (user.status == "poster") {
+                if (!user.hasDefaultPoster()) return user.updateStatus("This audio has no default poster");
                 user.setPoster("default");
                 user.sendMenu("poster");
                 return;
@@ -139,7 +140,7 @@ export class App {
             var user = User.getUser(ctx);
             if (!user.isAdmin()) return ctx.answerCbQuery("Only admin can delete audio from server", {show_alert: true});
             ctx.answerCbQuery().catch(() => {});
-            if (user.status != "default") return;
+            if (user.status != "default" || user.mode != "youtube") return;
             ctx.deleteMessage(user.menu).catch(() => {});
             user.menu = null;
             user.status = "none";
@@ -192,6 +193,24 @@ export class App {
             User.getUser(ctx).applyCuts([]);
         })
 
+        this.app.action(/^search:(\d+)$/, async ctx => {
+            ctx.answerCbQuery().catch(() => {});
+            User.getUser(ctx).pickResult(Number(ctx.match[1]));
+        })
+
+        this.app.action("searchCancel", async ctx => {
+            ctx.answerCbQuery().catch(() => {});
+            User.getUser(ctx).removeSearch();
+        })
+
+        this.app.command("search", async ctx => {
+            if (ctx.chat.type != "private") return;
+            var user = User.getUser(ctx);
+            var query = ctx.message.text.replace(/^\/search(@\w+)?/i, "").replace(/\s+/g, " ").trim().slice(0, 200);
+            if (!query) return user.notify("Send /search and what to look for, for example /search Never gonna give you up");
+            user.search(query);
+        })
+
         this.app.command("help", async ctx => {
             ctx.reply(Files.helpText, Menus.Simple);
         })
@@ -224,10 +243,7 @@ export class App {
                 }
                 else if (urls.length == 1) {
                     // Single file
-                    user.mode = "youtube";
-                    user.audio = new Audio(urls[0]);
-                    user.setPoster("default");
-                    user.parseLink().then(() => user.sendMenu("new"));
+                    user.loadSingle(urls[0]);
                 }
                 else {
                     // Batch
@@ -281,6 +297,9 @@ export class App {
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
                 user.setCookies(document);
             }
+            else if (Utility.isAudioDocument(document)) {
+                user.loadFile({id: document.file_id, uniqueId: document.file_unique_id, size: document.file_size, name: document.file_name});
+            }
         })
 
         this.app.on(filters.message("audio"), async ctx => {
@@ -292,6 +311,10 @@ export class App {
                 App.largeFiles[caption](ctx.message.audio.file_id);
                 delete App.largeFiles[caption];
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
+            }
+            else {
+                var audio = ctx.message.audio;
+                user.loadFile({id: audio.file_id, uniqueId: audio.file_unique_id, size: audio.file_size, name: audio.file_name, title: audio.title, performer: audio.performer});
             }
         });
 

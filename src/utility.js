@@ -138,6 +138,29 @@ export class Utility {
 
     /**
      * @param {string} text
+     * @returns {number}
+     */
+    static parseClock(text) {
+        var match = text?.match(/^(\d+):(\d+):(\d+(?:\.\d+)?)$/);
+        return match ? Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]) : 0;
+    }
+
+    /**
+     * @param {number | null} views
+     */
+    static getViewsString(views) {
+        return views == null ? "" : new Intl.NumberFormat("en", {notation: "compact", maximumFractionDigits: 1}).format(views);
+    }
+
+    /**
+     * @param {{file_name?: string, mime_type?: string}} document
+     */
+    static isAudioDocument(document) {
+        return /^audio\//i.test(document.mime_type ?? "") || /\.(mp3|m4a|flac|ogg|oga|opus|wav|aac|wma|aiff?)$/i.test(document.file_name ?? "");
+    }
+
+    /**
+     * @param {string} text
      * @returns {string | null}
      */
     static parseCookies(text) {
@@ -203,6 +226,13 @@ export class Utility {
      */
     static escapeCode(text) {
         return text?.replaceAll("\\", "\\\\").replaceAll("`", "\\`") ?? null;
+    }
+
+    /**
+     * @param {string} text
+     */
+    static escapeText(text) {
+        return text.replace(/[\\_*\[\]()~`>#+\-=|{}.!]/g, "\\$&");
     }
 
     /**

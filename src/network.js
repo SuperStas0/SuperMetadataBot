@@ -37,6 +37,12 @@ export class Network {
 
     static downloadTimeout = 30 * 60 * 1000;
 
+    static telegramFileLimit = 20 * 1024 * 1024;
+
+    static fileTimeout = 5 * 60 * 1000;
+
+    static searchCount = 5;
+
     static sponsorBlockUrl = "https://sponsor.ajay.app";
 
     static segmentCategories = ["sponsor", "selfpromo", "interaction", "intro", "outro", "preview", "music_offtopic", "filler"];
@@ -62,10 +68,11 @@ export class Network {
     /**
      * @param {string} url
      * @param {number} sizeLimit
+     * @param {number} [timeout]
      * @returns {Promise<Buffer | null>}
      */
-    static async downloadFile(url, sizeLimit) {
-        var response = await fetch(url, {signal: AbortSignal.timeout(15 * 1000)});
+    static async downloadFile(url, sizeLimit, timeout = 15 * 1000) {
+        var response = await fetch(url, {signal: AbortSignal.timeout(timeout)});
         if (!response.ok) return null;
         var buffer = Buffer.from(await response.arrayBuffer());
         return buffer.length <= sizeLimit ? buffer : null;
@@ -110,6 +117,16 @@ export class Network {
     static async fetchPlaylist(url, cookies) {
         var info = await this.fetchInfo(url, cookies);
         return {title: info.title, ids: (info.entries ?? []).map(entry => entry?.id).filter(id => /^[A-Za-z0-9_-]{11}$/.test(id))};
+    }
+
+    /**
+     * @param {string} query
+     * @param {string | null} [cookies]
+     * @returns {Promise<SearchResult[]>}
+     */
+    static async fetchSearch(query, cookies) {
+        var info = await this.fetchInfo(`ytsearch${this.searchCount}:${query}`, cookies);
+        return (info.entries ?? []).filter(entry => /^[A-Za-z0-9_-]{11}$/.test(entry?.id)).map(entry => ({id: entry.id, title: entry.title ?? "", channel: entry.channel ?? entry.uploader ?? "", views: entry.view_count ?? null, duration: entry.duration ?? null})).sort((first, second) => (second.views ?? -1) - (first.views ?? -1));
     }
 
     /**

@@ -166,6 +166,11 @@ export class Files {
         for (var name of this.list("downloads")) {
             if (/^cookies-.*\.txt$/.test(name)) this.tryDelete(this.path("downloads", name));
         }
+        for (var id of this.list(this.path("downloads", "telegram"))) {
+            for (var name of this.list(this.path("downloads", "telegram", id))) {
+                if (/^(original\..*|tmp-audio\.m4a)$/.test(name)) this.tryDelete(this.path("downloads", "telegram", id, name));
+            }
+        }
         for (var user of this.list(this.path("downloads", "users"))) {
             for (var name of this.list(this.path("downloads", "users", user))) {
                 if (name.endsWith(".m4a") || name.endsWith(".m4a.txt") || name == "cookies.txt.tmp") this.delete(this.path("downloads", "users", user, name));
@@ -193,8 +198,11 @@ export class Files {
     static cleanCache(maxAge, maxFolderAge, maxSize) {
         var now = Date.now();
         var audios = [];
-        for (var id of this.list(this.path("downloads", "youtube"))) {
-            var folder = this.path("downloads", "youtube", id);
+        var folders = [];
+        for (var source of ["youtube", "telegram"]) {
+            for (var id of this.list(this.path("downloads", source))) folders.push(this.path("downloads", source, id));
+        }
+        for (var folder of folders) {
             for (var name of this.list(folder)) {
                 var path = this.path(folder, name);
                 if (!name.startsWith("audio.m4a")) continue;
@@ -244,6 +252,36 @@ export class Files {
         }
         finally {
             this.tryDelete(listPath);
+        }
+    }
+
+    /**
+     * @param {string} inputPath
+     * @param {string} outputPath
+     * @param {boolean} copy
+     * @returns {Promise<number>} duration in seconds
+     */
+    static async importAudio(inputPath, outputPath, copy) {
+        return await new Promise((resolve, reject) => {
+            var duration = 0;
+            var command = ffmpeg(inputPath).on("codecData", data => { duration = Utility.parseClock(data.duration); }).outputOptions("-map", "0:a:0", "-map_metadata", "-1");
+            if (copy) command.audioCodec("copy");
+            else command.audioCodec("aac").audioBitrate("192k");
+            command.on("end", () => resolve(Math.round(duration))).on("error", reject).save(outputPath);
+        })
+    }
+
+    /**
+     * @param {string} inputPath
+     * @param {string} outputPath
+     */
+    static async extractCover(inputPath, outputPath) {
+        try {
+            await new Promise((resolve, reject) => ffmpeg(inputPath).videoFilters("scale=320:320:force_original_aspect_ratio=decrease", "format=yuvj420p").outputOptions("-map", "0:v:0", "-frames:v", "1", "-q:v", "3").on("end", resolve).on("error", reject).save(outputPath));
+        }
+        catch (error) {
+            this.tryDelete(outputPath);
+            throw error;
         }
     }
 

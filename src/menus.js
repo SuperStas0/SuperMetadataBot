@@ -18,6 +18,8 @@ export class Menus {
 
     static Main = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2], ["Delete", "delete", 3]);
 
+    static Upload = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2]);
+
     static Playlist = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2], ["Previous", "prev", 3], ["Next", "next", 3], ["Send All", "sendAll", 4]);
 
     /**
@@ -38,6 +40,15 @@ export class Menus {
         }
         if (cuts) buttons.push(["Clear all", "cutsClear", ++row]);
         buttons.push(["Done", "cancel", ++row]);
+        return this.GenerateMarkup(...buttons);
+    }
+
+    /**
+     * @param {number} count
+     */
+    static GenerateSearch(count) {
+        var buttons = Array.from({length: count}, (_, index) => [`${index + 1}`, `search:${index}`, 0]);
+        buttons.push(["Cancel", "searchCancel", 1]);
         return this.GenerateMarkup(...buttons);
     }
 

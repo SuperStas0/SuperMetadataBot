@@ -2,6 +2,8 @@
 Send a YouTube link and the bot loads its audio as m4a.
 Send several links in one message to load them as a batch, up to 10 at once.
 Send a YouTube playlist link to load all its videos as a batch. The bot shows the video count and asks for confirmation first, a long playlist may take a long time to load. The same batch limit applies.
+Send `/search query` to search YouTube. The bot shows the first 5 results sorted by views, with the channel, views and duration. Press the number of a result to load it.
+Send an audio or a music file to the bot to edit your own file, up to 20 MB, the Telegram bot download limit. Any format ffmpeg reads works, the result is m4a. Files other than m4a are converted to 192 kbit/s AAC. The title, performer and embedded cover are taken from the file.
 Live streams and videos longer than 4 hours are not supported.
 Audio is limited to 50 MB, the Telegram bot upload limit. Quality is lowered to fit, videos that still do not fit are declined.
 Loaded audio is cached on the server, repeated links load faster.
@@ -14,7 +16,7 @@ Loaded audio is cached on the server, repeated links load faster.
 *Poster* - send a photo to use as the poster. _Set default_ restores the YouTube thumbnail, _Remove_ clears it, _Make square_ crops it from the middle to 1:1 and _Make original_ undoes that
 *Send* - send the edited audio
 *Cancel* - go back to the main menu
-*Delete* - admin only, deletes the loaded audio from the server and loads it again
+*Delete* - admin only, deletes the loaded audio from the server and loads it again. Not available for sent files
 The messages you send to change a value are deleted after they are applied.
 
 *Batch*
@@ -24,6 +26,7 @@ The messages you send to change a value are deleted after they are applied.
 
 *Commands*
 /start - basic information
+/search - search YouTube, for example `/search Never gonna give you up`
 /help - this text
 /cookies - how to send cookies and their current status
 /removecookies - delete your saved cookies

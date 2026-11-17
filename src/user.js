@@ -1,3 +1,4 @@
+import { extname } from "path";
 import { App }  from "../main.js";
 import { Utility } from "./utility.js";
 import { Files } from "./files.js";
@@ -40,6 +41,10 @@ export class User {
         this.pending = null;
         /** @type {number | null} */
         this.confirm = null;
+        /** @type {SearchResult[] | null} */
+        this.results = null;
+        /** @type {number | null} */
+        this.searchMenu = null;
     }
 
     getAudio() {
@@ -131,6 +136,164 @@ export class User {
             return false;
         }
         return true;
+    }
+
+    /**
+     * @param {string} url
+     */
+    loadSingle(url) {
+        this.removeSearch();
+        this.mode = "youtube";
+        this.audio = new Audio(url);
+        this.setPoster("default");
+        this.parseLink().then(() => this.sendMenu("new"));
+    }
+
+    /**
+     * @param {string} query
+     */
+    async search(query) {
+        if (this.status == "loading") return this.updateStatus("Please wait for previous request to finish");
+        if (this.status != "none" && this.status != "default") return;
+        var previous = this.status;
+        this.status = "loading";
+        this.removeSearch();
+        this.updateStatus(`Searching: ${query}`);
+        try {
+            var own = this.hasCookies() ? this.getCookiesPath() : null;
+            var results = await Utility.timeout(Network.fetchSearch(query).catch(error => {
+                if (!own || !Network.needsCookies(error)) throw error;
+                return Network.fetchSearch(query, own);
+            }), Network.infoTimeout, "Search timed out");
+            this.clearStatus();
+            this.status = previous;
+            if (!results.length) return this.notify(`Nothing found: ${query}`);
+            this.results = results;
+            var text = results.map((result, index) => `${index + 1}\\. \`${Utility.escapeCode(result.title)}\`\n${Utility.escapeText([result.channel, result.views != null && `${Utility.getViewsString(result.views)} views`, result.duration && Utility.getDurationString(result.duration)].filter(part => part).join(", "))}`).join("\n\n");
+            var msg = await App.app.telegram.sendMessage(this.id, text, Menus.GenerateSearch(results.length));
+            this.searchMenu = msg.message_id;
+        }
+        catch (error) {
+            console.log(error);
+            this.clearStatus();
+            this.status = previous;
+            this.notify(Network.needsCookies(error) ? this.getBlockedText() : `Search failed: ${query}`);
+        }
+    }
+
+    /**
+     * @param {number} index
+     */
+    pickResult(index) {
+        var result = this.results?.[index];
+        if (!result || this.status != "none" && this.status != "default") return;
+        this.loadSingle(`https://www.youtube.com/watch?v=${result.id}`);
+    }
+
+    removeSearch() {
+        if (this.searchMenu) App.app.telegram.deleteMessage(this.id, this.searchMenu).catch(() => {});
+        this.searchMenu = null;
+        this.results = null;
+    }
+
+    /**
+     * @param {TelegramFile} file
+     */
+    loadFile(file) {
+        if (this.status == "loading") return this.updateStatus("Please wait for previous request to finish");
+        if (this.status != "none" && this.status != "default") return;
+        if (file.size > Network.telegramFileLimit) return this.notify(`File is over the ${Network.telegramFileLimit / 1024 / 1024} MB limit for files sent to a bot`);
+        this.parseFile(file);
+    }
+
+    /**
+     * @param {TelegramFile} file
+     */
+    async parseFile(file) {
+        var previous = this.status;
+        var title = (file.title || file.name?.replace(/\.[^.]+$/, "") || "Audio").slice(0, User.textLimit);
+        var performer = file.performer ? file.performer.slice(0, User.textLimit) : null;
+        var path = Files.path("downloads", "telegram", file.uniqueId);
+        var admin = this.isAdmin();
+        this.status = "loading";
+        this.updateStatus(`Loading: ${title}`);
+
+        try {
+            if (!Files.exists(path, "audio.m4a") && Files.getFreeSpace() < Network.minFreeSpace) {
+                App.clean(true);
+                if (Files.getFreeSpace() < Network.minFreeSpace) return this.fail(previous, "Not enough free space on the server, try again later");
+            }
+
+            await Utility.lock(path, async () => {
+                var best = Files.path(path, "audio.m4a");
+                if (Files.exists(path, "data.json") && Files.exists(best)) return Files.touch(best);
+
+                Files.createFolder(path);
+                var link = String(await App.app.telegram.getFileLink(file.id));
+                var ext = extname(new URL(link).pathname).toLowerCase();
+                if (!/^\.[a-z0-9]{1,5}$/.test(ext)) ext = ".bin";
+                var original = Files.path(path, `original${ext}`);
+                var temp = Files.path(path, "tmp-audio.m4a");
+                try {
+                    var buffer = await Network.downloadFile(link, Network.telegramFileLimit, Network.fileTimeout);
+                    if (!buffer) throw new Error("Failed to download the file");
+                    Files.write(original, buffer);
+                    var duration;
+                    try {
+                        duration = await Files.importAudio(original, temp, ext == ".m4a");
+                    }
+                    catch (error) {
+                        if (ext != ".m4a") throw error;
+                        duration = await Files.importAudio(original, temp, false);
+                    }
+                    if (!duration) throw new Error("Failed to read the audio duration");
+                    if (duration > Network.maxDuration) throw new Error("Audio is too long");
+                    Files.move(temp, best);
+                    await Files.extractCover(original, Files.path(path, "poster.jpg")).catch(() => {});
+                    Files.saveAudio(path, Object.assign(new AudioSource(), {title: title, performer: performer, duration: duration}));
+                }
+                finally {
+                    Files.tryDelete(original);
+                    Files.tryDelete(temp);
+                }
+            })
+
+            var source = Files.loadAudio(path);
+            source.url = file.uniqueId;
+            source.file = "audio.m4a";
+            source.title = title;
+            source.performer = performer;
+            if (Files.getFileSize(Files.path(path, source.file)) >= Network.botFileLimit && !admin) return this.fail(previous, `This audio is over the ${Network.botFileLimit / 1024 / 1024} MB limit of this bot. Host your own bot to remove the limit: https://github.com/SuperStas0/SuperMetadata`);
+
+            this.removeSearch();
+            this.mode = "telegram";
+            this.audio = new Audio();
+            this.audio.source = source;
+            this.audio.performer = performer;
+            this.setPoster(Files.exists(path, "poster.jpg") ? "default" : null);
+            App.clean(true);
+            this.clearStatus();
+            this.status = "default";
+            await this.sendMenu("new");
+        }
+        catch (error) {
+            console.log(error);
+            this.fail(previous, error.message == "Audio is too long" ? "Audio is too long" : `Failed to load: ${title}`);
+        }
+    }
+
+    /**
+     * @param {UserStatus} status
+     * @param {string} text
+     */
+    fail(status, text) {
+        this.clearStatus();
+        this.status = status;
+        return this.notify(text);
+    }
+
+    hasDefaultPoster() {
+        return Files.exists(this.getAudio().source.path, "poster.jpg");
     }
 
     /**
@@ -240,12 +403,12 @@ export class User {
         if (mode == "new") {
             if (this.menu) App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
             this.status = "default";
-            var msg = await App.app.telegram.sendMessage(this.id, menuText, this.mode == "playlist" ? Menus.Playlist : Menus.Main);
+            var msg = await App.app.telegram.sendMessage(this.id, menuText, this.getMainMenu());
             this.menu = msg.message_id;
         }
         else if (mode == "default") {
             try {
-                await App.app.telegram.editMessageText(this.id, this.menu, null, menuText, this.mode == "playlist" ? Menus.Playlist : Menus.Main);
+                await App.app.telegram.editMessageText(this.id, this.menu, null, menuText, this.getMainMenu());
             }
             catch (error) {
                 if (!error.response?.description?.includes("message is not modified")) {
@@ -331,6 +494,10 @@ export class User {
      */
     removeCut(index) {
         this.applyCuts(this.getAudio().cuts.filter((_, position) => position != index));
+    }
+
+    getMainMenu() {
+        return this.mode == "playlist" ? Menus.Playlist : this.mode == "telegram" ? Menus.Upload : Menus.Main;
     }
 
     /**
@@ -558,7 +725,7 @@ export class User {
         info.text += `Title: \`${info.title}\`\n`;
         info.text += info.performer ? `Performer: \`${info.performer}\`\n` : "No performer\n";
         info.text += `Duration: \`${Utility.getDurationString(info.duration)}\`\n`;
-        info.text += info.poster ? `Poster: ${{"default": "Youtube", "custom": "Custom"}[info.poster]}${audio.posterSquare ? ", square" : ""}` : "No poster";
+        info.text += info.poster ? `Poster: ${{"default": this.mode == "telegram" ? "Original" : "Youtube", "custom": "Custom"}[info.poster]}${audio.posterSquare ? ", square" : ""}` : "No poster";
         if (info.cuts.length) info.text += `\nCuts: ${info.cuts.length}, new duration \`${Utility.getDurationString(Utility.getDuration(info.duration, info.cuts))}\``;
 
         return info;
