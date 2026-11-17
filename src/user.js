@@ -132,7 +132,7 @@ export class User {
             this.clearStatus();
             var segments = this.mode == "playlist" ? null : this.loadSegments();
             await this.sendSource();
-            if (segments && await segments) this.notify(audio.source.segments.length ? `SponsorBlock: ${audio.source.segments.length} segments found, see Cuts` : "SponsorBlock: no segments found");
+            if (segments && await segments && audio.source.segments.length) this.notify(`SponsorBlock: ${audio.source.segments.length} segments found, see Cuts`);
             this.status = "default";
         }
         catch (error) {

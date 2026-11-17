@@ -64,7 +64,7 @@ export class Menus {
 
     static DefaultNRemove = this.GenerateMarkup(["Set default", "default", 0], ["Remove", "null", 1], ["Back", "cancel", 2]);
 
-    static SearchAsk = this.GenerateMarkup(["Yes", "searchYes", 0], ["No", "searchNo", 0]);
+    static SearchAsk = this.GenerateMarkup(["Yes", "searchYes", 0]);
 
     static Confirm = this.GenerateMarkup(["Load all", "playlistLoad", 0], ["Cancel", "playlistCancel", 1]);
 

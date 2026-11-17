@@ -13,6 +13,9 @@ export class Files {
         if (missing.length) throw new Error(`static\\config.json is missing: ${missing.join(", ")}`);
     }
 
+    /** @type {{locked?: boolean}} */
+    static settings = this.exists("static", "settings.json") ? this.load("static", "settings.json") : {};
+
     /** @type {string} */
     static startText = Utility.escapeMarkdown(this.read("static", "start.md"));
 
@@ -59,6 +62,12 @@ export class Files {
      */
     static save(path, data) {
         this.write(path, JSON.stringify(data, null, 0));
+    }
+
+    static saveSettings() {
+        var path = this.path("static", "settings.json");
+        this.write(`${path}.tmp`, JSON.stringify(this.settings, null, 4));
+        this.move(`${path}.tmp`, path);
     }
 
     /**

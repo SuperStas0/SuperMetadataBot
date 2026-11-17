@@ -46,9 +46,19 @@ export class App {
         process.once("SIGTERM", () => this.stop("SIGTERM"));
 
         this.app.use(async (ctx, next) => {
-            await next();
-            var entity = ctx.message?.entities?.[0];
-            if (ctx.chat?.type == "private" && entity?.type == "bot_command" && entity.offset == 0) ctx.deleteMessage(ctx.message.message_id).catch(() => {});
+            if (Files.settings.locked && ctx.from?.id != Files.config.admin) {
+                if (ctx.callbackQuery) ctx.answerCbQuery("This bot is private").catch(() => {});
+                else if (ctx.chat?.type == "private") ctx.reply("This bot is private").catch(() => {});
+                return;
+            }
+            if (ctx.chat?.type == "private" && ctx.callbackQuery?.data != "searchYes") this.data[ctx.chat.id]?.removeAsk();
+            try {
+                await next();
+            }
+            finally {
+                var entity = ctx.message?.entities?.[0];
+                if (ctx.chat?.type == "private" && entity?.type == "bot_command" && entity.offset == 0) ctx.deleteMessage(ctx.message.message_id).catch(() => {});
+            }
         })
 
         this.app.start(async ctx => {
@@ -209,11 +219,6 @@ export class App {
             User.getUser(ctx).confirmSearch();
         })
 
-        this.app.action("searchNo", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            User.getUser(ctx).removeAsk();
-        })
-
         this.app.action("searchCancel", async ctx => {
             ctx.answerCbQuery().catch(() => {});
             User.getUser(ctx).removeSearch();
@@ -231,7 +236,25 @@ export class App {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
             if (!user.isAdmin()) return user.notify("Only admin can check the storage");
-            user.notify(Utility.getStorageText(Files.getStorage(), Files.getFreeSpace(), App.cacheSize));
+            user.notify(`Access: ${Files.settings.locked ? "admin only" : "everyone"}\n${Utility.getStorageText(Files.getStorage(), Files.getFreeSpace(), App.cacheSize)}`);
+        })
+
+        this.app.command("lock", async ctx => {
+            if (ctx.chat.type != "private") return;
+            var user = User.getUser(ctx);
+            if (!user.isAdmin()) return user.notify("Only admin can change the access");
+            Files.settings.locked = true;
+            Files.saveSettings();
+            user.notify("Bot is locked, only the admin can use it. Send /unlock to open it for everyone");
+        })
+
+        this.app.command("unlock", async ctx => {
+            if (ctx.chat.type != "private") return;
+            var user = User.getUser(ctx);
+            if (!user.isAdmin()) return user.notify("Only admin can change the access");
+            Files.settings.locked = false;
+            Files.saveSettings();
+            user.notify("Bot is open, anyone can use it. Send /lock to restrict it to the admin");
         })
 
         this.app.command("help", async ctx => {

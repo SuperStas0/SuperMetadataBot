@@ -7,7 +7,7 @@ Telegram bot to download audio from YouTube and edit its metadata.
 2. Run `build.bat` (Windows) or `bash build.sh` (Linux, macOS). It installs Node.js 22 or newer if missing, installs the dependencies and starts the setup.
 3. Follow the setup instructions: create the bot with [@BotFather](https://t.me/BotFather), get an api_id and api_hash on [my.telegram.org](https://my.telegram.org), log in your Telegram account. The account becomes the bot admin.
 
-The settings are saved to `static\config.json`. Run the build with `-s` to set them up again.
+The settings are saved to `static\config.json`. The admin can restrict the bot to themselves with `/lock` and open it again with `/unlock`, the state is saved to `static\settings.json`. Run the build with `-s` to set them up again.
 
 # Usage
 Public instance: [@supermetadatabot](https://t.me/supermetadatabot). Hosting your own is recommended.
@@ -46,7 +46,7 @@ Run `build.bat [-c] [-s] [-r] [-h]`. Flags combine in any order, e.g. `build.bat
 | --- | --- |
 | `-c` | Clean: delete previous build output first |
 | `-s` | Setup: ask for the bot token and Telegram account, save `static\config.json` |
-| `-r` | Release: package the build into `release\Metadata.zip` (`main.js`, `start.js`, `build.bat`, `build.sh`, `src`, `static` without `config.json` and its backup, `package.json`, `package-lock.json`, `readme.md`, `LICENSE.md`) |
+| `-r` | Release: package the build into `release\Metadata.zip` (`main.js`, `start.js`, `build.bat`, `build.sh`, `src`, `static` without `config.json`, its backup and `settings.json`, `package.json`, `package-lock.json`, `readme.md`, `LICENSE.md`) |
 | `-h` | Show this help |
 
 Setup also runs when `static\config.json` is missing, unless `-r` is given. `build.sh` (Linux, macOS) accepts `-c`, `-s` and `-h` with the same meaning.
