@@ -45,6 +45,10 @@ export class User {
         this.results = null;
         /** @type {number | null} */
         this.searchMenu = null;
+        /** @type {string | null} */
+        this.askQuery = null;
+        /** @type {number | null} */
+        this.askMenu = null;
     }
 
     getAudio() {
@@ -179,6 +183,30 @@ export class User {
             this.status = previous;
             this.notify(Network.needsCookies(error) ? this.getBlockedText() : `Search failed: ${query}`);
         }
+    }
+
+    /**
+     * @param {string} text
+     */
+    async askSearch(text) {
+        var query = text.replace(/\s+/g, " ").trim().slice(0, 200);
+        if (!query) return;
+        this.removeAsk();
+        this.askQuery = query;
+        var msg = await App.app.telegram.sendMessage(this.id, `Search for \`${Utility.escapeCode(query)}\`?`, Menus.SearchAsk);
+        this.askMenu = msg.message_id;
+    }
+
+    confirmSearch() {
+        var query = this.askQuery;
+        this.removeAsk();
+        if (query) this.search(query);
+    }
+
+    removeAsk() {
+        if (this.askMenu) App.app.telegram.deleteMessage(this.id, this.askMenu).catch(() => {});
+        this.askMenu = null;
+        this.askQuery = null;
     }
 
     /**

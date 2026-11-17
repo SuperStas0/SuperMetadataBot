@@ -204,6 +204,16 @@ export class App {
             User.getUser(ctx).pickResult(Number(ctx.match[1]));
         })
 
+        this.app.action("searchYes", async ctx => {
+            ctx.answerCbQuery().catch(() => {});
+            User.getUser(ctx).confirmSearch();
+        })
+
+        this.app.action("searchNo", async ctx => {
+            ctx.answerCbQuery().catch(() => {});
+            User.getUser(ctx).removeAsk();
+        })
+
         this.app.action("searchCancel", async ctx => {
             ctx.answerCbQuery().catch(() => {});
             User.getUser(ctx).removeSearch();
@@ -252,7 +262,8 @@ export class App {
                 }
                 else if (urls.length == 0) {
                     // Youtube search
-                    return;
+                    if (ctx.message.text.startsWith("/") || ctx.message.entities?.some(entity => entity.type == "url")) return;
+                    user.askSearch(ctx.message.text);
                 }
                 else if (urls.length == 1) {
                     // Single file

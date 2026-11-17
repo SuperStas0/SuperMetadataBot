@@ -16,7 +16,7 @@ Public instance: [@supermetadatabot](https://t.me/supermetadatabot). Hosting you
 2. Send `/start` to the bot.
 
 Load audio into the bot by any of:
-- Built-in YouTube search: `/search query`, first 5 results sorted by views
+- Built-in YouTube search: `/search query` or any text message, first 5 results sorted by views
 - YouTube video link
 - YouTube playlist link (asks for confirmation first)
 - Audio or music file sent to the bot, up to 20 MB
