@@ -2,6 +2,7 @@ downloads/
 test.js
 node_modules/
 static/config.json
+static/config.json.*
 static/cookies.txt
 setup.js
 release/

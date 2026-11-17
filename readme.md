@@ -3,17 +3,16 @@
 Telegram bot to download audio from YouTube and edit its metadata.
 
 # Installation
-1. Install Node.js 22 or newer.
-2. Clone the repository: `git clone https://github.com/SuperStas0/SuperMetadata.git`
-3. Run `build.bat` (installs dependencies).
-4. Create a bot with [@BotFather](https://t.me/BotFather) and copy its API key.
-5. Run `node setup.js`, enter the bot's API key and the needed fields for your account.
-6. When asked for the 2FA code, enter the one you receive from Telegram.
+1. Clone the repository: `git clone https://github.com/SuperStas0/SuperMetadata.git`
+2. Run `build.bat` (Windows) or `bash build.sh` (Linux, macOS). It installs Node.js 22 or newer if missing, installs the dependencies and starts the setup.
+3. Follow the setup instructions: create the bot with [@BotFather](https://t.me/BotFather), get an api_id and api_hash on [my.telegram.org](https://my.telegram.org), log in your Telegram account. The account becomes the bot admin.
+
+The settings are saved to `static\config.json`. Run the build with `-s` to set them up again.
 
 # Usage
 Public instance: [@supermetadatabot](https://t.me/supermetadatabot). Hosting your own is recommended.
 
-1. Run `node main.js`.
+1. Run `node start.js`.
 2. Send `/start` to the bot.
 
 Load audio into the bot by any of:
@@ -37,15 +36,18 @@ Some videos need a YouTube login: age restricted ones, and any video when YouTub
 
 # Building
 Requirements:
-- Node.js 22 or newer
+- Node.js 22 or newer (installed automatically if missing)
 
-Run `build.bat [-c] [-r] [-h]`. Flags combine in any order, e.g. `build.bat -cr`.
+Run `build.bat [-c] [-s] [-r] [-h]`. Flags combine in any order, e.g. `build.bat -cr`.
 
 | Flag | Action |
 | --- | --- |
 | `-c` | Clean: delete previous build output first |
-| `-r` | Release: package the build into `release\Metadata.zip` (`main.js`, `src`, `static` without `config.json`, `package.json`, `package-lock.json`, `readme.md`, `LICENSE.md`) |
+| `-s` | Setup: ask for the bot token and Telegram account, save `static\config.json` |
+| `-r` | Release: package the build into `release\Metadata.zip` (`main.js`, `start.js`, `build.bat`, `build.sh`, `src`, `static` without `config.json` and its backup, `package.json`, `package-lock.json`, `readme.md`, `LICENSE.md`) |
 | `-h` | Show this help |
+
+Setup also runs when `static\config.json` is missing, unless `-r` is given. `build.sh` (Linux, macOS) accepts `-c`, `-s` and `-h` with the same meaning.
 
 Build output: `node_modules`
 
