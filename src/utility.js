@@ -44,6 +44,34 @@ export class Utility {
     }
 
     /**
+     * @param {number} bytes
+     */
+    static getSizeString(bytes) {
+        var units = ["B", "KB", "MB", "GB", "TB"];
+        var index = 0;
+        while (bytes >= 1024 && index < units.length - 1) {
+            bytes /= 1024;
+            index++;
+        }
+        return index ? `${bytes.toFixed(1)} ${units[index]}` : `${bytes} B`;
+    }
+
+    /**
+     * @param {{name: string, size: number, count: number}[]} groups
+     * @param {number} free
+     * @param {number} limit
+     */
+    static getStorageText(groups, free, limit) {
+        var total = groups.reduce((sum, group) => sum + group.size, 0);
+        var audio = groups.filter(group => group.audio).reduce((sum, group) => sum + group.size, 0);
+        var lines = [`Used: ${this.getSizeString(total)}`, `Free on disk: ${this.getSizeString(free)}`, `Cached audio: ${this.getSizeString(audio)} of ${this.getSizeString(limit)} limit`, ""];
+        for (var group of groups.filter(group => group.count).sort((first, second) => second.size - first.size)) {
+            lines.push(`${group.name}: ${this.getSizeString(group.size)}, ${Math.round(group.size / (total || 1) * 100)}%, ${group.count} files`);
+        }
+        return lines.join("\n");
+    }
+
+    /**
      * @param {string} text
      * @param {number} duration
      * @returns {{cuts?: Cut[], error?: string}}
@@ -54,11 +82,13 @@ export class Utility {
             part = part.trim();
             if (!part) continue;
             var sides = part.split("-").map(side => side.trim().toLowerCase());
-            var start = sides[0] == "start" ? 0 : this.parseTimecode(sides[0]);
-            var end = sides[1] == "end" ? duration : this.parseTimecode(sides[1] ?? "");
-            if (sides.length != 2 || start == null || end == null) return {error: `Incorrect format: ${part}`};
+            if (sides.length != 2 || !sides[0] && !sides[1]) return {error: `Incorrect format: ${part}`};
+            var start = !sides[0] || sides[0] == "start" ? 0 : this.parseTimecode(sides[0]);
+            var end = !sides[1] || sides[1] == "end" ? duration : this.parseTimecode(sides[1]);
+            if (start == null || end == null) return {error: `Incorrect format: ${part}`};
+            if (start >= duration) return {error: `Beyond the duration ${this.getDurationString(duration)}: ${part}`};
+            end = Math.min(end, duration);
             if (start >= end) return {error: `Start must be before end: ${part}`};
-            if (end > duration) return {error: `Beyond the duration ${this.getDurationString(duration)}: ${part}`};
             cuts.push([start, end]);
         }
         return cuts.length ? {cuts: cuts} : {error: "Incorrect format"};

@@ -229,6 +229,36 @@ export class Files {
         }
     }
 
+    static getStorage() {
+        var groups = ["YouTube audio", "YouTube posters and info", "Uploaded audio", "Uploaded posters and info", "User posters", "Cookies", "User temporary files", "Other"].map(name => ({name: name, size: 0, count: 0, audio: name.endsWith("audio")}));
+        var add = (name, size) => {
+            var group = groups.find(group => group.name == name);
+            group.size += size;
+            group.count++;
+        }
+        var classify = (parts, name) => {
+            var audio = /^audio.*\.m4a$/.test(name);
+            if (parts[0] == "youtube") return audio ? "YouTube audio" : "YouTube posters and info";
+            if (parts[0] == "telegram") return audio ? "Uploaded audio" : "Uploaded posters and info";
+            if (parts[0] == "users" && parts.length > 1) return /^poster/.test(name) ? "User posters" : /^cookies\.txt$/.test(name) ? "Cookies" : "User temporary files";
+            return "Other";
+        }
+        var walk = (path, parts) => {
+            for (var entry of fs.readdirSync(path, {withFileTypes: true})) {
+                var full = join(path, entry.name);
+                try {
+                    if (entry.isDirectory()) walk(full, [...parts, entry.name]);
+                    else if (entry.isFile()) add(classify(parts, entry.name), fs.statSync(full).size);
+                }
+                catch (error) {
+                    if (error.code != "ENOENT") throw error;
+                }
+            }
+        }
+        if (this.exists("downloads")) walk("downloads", []);
+        return groups;
+    }
+
     /**
      * @param {string} inputPath
      * @param {string} outputPath

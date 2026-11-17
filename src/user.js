@@ -748,7 +748,7 @@ export class User {
             info.cuts.forEach((cut, index) => lines.push(`${index + 1}. ${format(cut)}`));
             if (suggestions.length) lines.push("Suggested by SponsorBlock:");
             suggestions.forEach((segment, index) => lines.push(`${index + 1}. ${format([segment.start, segment.end])} ${User.categoryNames[segment.category]}`));
-            lines.push("Send a range to cut out, for example 1:30 - 2:45, one range per line. Use start and end for the edges of the audio");
+            lines.push("Send a range to cut out, for example 1:30 - 2:45, one range per line. Leave a side empty for the edge of the audio, for example 1:30 -");
             return lines.join("\n");
         }
     }

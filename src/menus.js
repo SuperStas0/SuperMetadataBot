@@ -39,7 +39,7 @@ export class Menus {
             buttons.push([`Remove ${index + 1}`, `cutRemove:${index}`, row]);
         }
         if (cuts) buttons.push(["Clear all", "cutsClear", ++row]);
-        buttons.push(["Done", "cancel", ++row]);
+        buttons.push(["Back", "cancel", ++row]);
         return this.GenerateMarkup(...buttons);
     }
 
@@ -52,25 +52,25 @@ export class Menus {
         return this.GenerateMarkup(...buttons);
     }
 
-    static Cancel = this.GenerateMarkup(["Cancel", "cancel", 0]);
+    static Cancel = this.GenerateMarkup(["Back", "cancel", 0]);
 
-    static CancelWithNull = this.GenerateMarkup(["Null", "null", 0], ["Cancel", "cancel", 1]);
+    static CancelWithNull = this.GenerateMarkup(["Null", "null", 0], ["Back", "cancel", 1]);
 
     static Choice = this.GenerateMarkup(["1", "select", 0]);
 
-    static DefaultOnly = this.GenerateMarkup(["Set default", "default", 0], ["Cancel", "cancel", 1]);
+    static DefaultOnly = this.GenerateMarkup(["Set default", "default", 0], ["Back", "cancel", 1]);
 
-    static RemoveOnly = this.GenerateMarkup(["Remove", "null", 0], ["Cancel", "cancel", 1]);
+    static RemoveOnly = this.GenerateMarkup(["Remove", "null", 0], ["Back", "cancel", 1]);
 
-    static DefaultNRemove = this.GenerateMarkup(["Set default", "default", 0], ["Remove", "null", 1], ["Cancel", "cancel", 2]);
+    static DefaultNRemove = this.GenerateMarkup(["Set default", "default", 0], ["Remove", "null", 1], ["Back", "cancel", 2]);
 
     static Confirm = this.GenerateMarkup(["Load all", "playlistLoad", 0], ["Cancel", "playlistCancel", 1]);
 
-    static PosterDefault = this.GenerateMarkup(["Make square", "square", 0], ["Remove", "null", 1], ["Cancel", "cancel", 2]);
+    static PosterDefault = this.GenerateMarkup(["Make square", "square", 0], ["Remove", "null", 1], ["Back", "cancel", 2]);
 
-    static PosterDefaultSquare = this.GenerateMarkup(["Make original", "square", 0], ["Remove", "null", 1], ["Cancel", "cancel", 2]);
+    static PosterDefaultSquare = this.GenerateMarkup(["Make original", "square", 0], ["Remove", "null", 1], ["Back", "cancel", 2]);
 
-    static PosterCustom = this.GenerateMarkup(["Make square", "square", 0], ["Set default", "default", 1], ["Remove", "null", 2], ["Cancel", "cancel", 3]);
+    static PosterCustom = this.GenerateMarkup(["Make square", "square", 0], ["Set default", "default", 1], ["Remove", "null", 2], ["Back", "cancel", 3]);
 
-    static PosterCustomSquare = this.GenerateMarkup(["Make original", "square", 0], ["Set default", "default", 1], ["Remove", "null", 2], ["Cancel", "cancel", 3]);
+    static PosterCustomSquare = this.GenerateMarkup(["Make original", "square", 0], ["Set default", "default", 1], ["Remove", "null", 2], ["Back", "cancel", 3]);
 }

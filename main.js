@@ -45,6 +45,12 @@ export class App {
         process.once("SIGINT", () => this.stop("SIGINT"));
         process.once("SIGTERM", () => this.stop("SIGTERM"));
 
+        this.app.use(async (ctx, next) => {
+            await next();
+            var entity = ctx.message?.entities?.[0];
+            if (ctx.chat?.type == "private" && entity?.type == "bot_command" && entity.offset == 0) ctx.deleteMessage(ctx.message.message_id).catch(() => {});
+        })
+
         this.app.start(async ctx => {
             if (ctx.chat.type != "private") return ctx.reply("Sorry, bot only works in DMs");
             ctx.reply(Files.startText, Menus.Simple);
@@ -209,6 +215,13 @@ export class App {
             var query = ctx.message.text.replace(/^\/search(@\w+)?/i, "").replace(/\s+/g, " ").trim().slice(0, 200);
             if (!query) return user.notify("Send /search and what to look for, for example /search Never gonna give you up");
             user.search(query);
+        })
+
+        this.app.command("storage", async ctx => {
+            if (ctx.chat.type != "private") return;
+            var user = User.getUser(ctx);
+            if (!user.isAdmin()) return user.notify("Only admin can check the storage");
+            user.notify(Utility.getStorageText(Files.getStorage(), Files.getFreeSpace(), App.cacheSize));
         })
 
         this.app.command("help", async ctx => {
