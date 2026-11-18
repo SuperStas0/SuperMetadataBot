@@ -1,5 +1,6 @@
 import { App } from "../main.js";
 import { Files } from "./files.js";
+import { Log } from "./log.js";
 import { YtDlp } from "ytdlp-nodejs";
 import ffmpegStatic from "ffmpeg-static";
 import dns from "node:dns";
@@ -255,7 +256,7 @@ export class Network {
                     await this.dropUserClient();
                     if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED|USER_DEACTIVATED/.test(error.errorMessage ?? "")) throw new Error("User client session is no longer valid, run the build script with -s to log in again");
                     if (attempt >= 2) throw error;
-                    console.log(error);
+                    Log.error("User client", error);
                 }
             }
         }

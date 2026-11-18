@@ -3,6 +3,7 @@ import { join, resolve as resolvePath } from "path";
 import ffmpeg from "fluent-ffmpeg";
 import { AudioSource } from "./audio.js";
 import { Utility } from "./utility.js";
+import { Log } from "./log.js";
 
 export class Files {
     /** @type {ConfigFile} */
@@ -195,7 +196,7 @@ export class Files {
             this.delete(path);
         }
         catch (error) {
-            console.log(error);
+            Log.error(`Delete ${path}`, error);
         }
     }
 

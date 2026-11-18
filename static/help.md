@@ -31,6 +31,7 @@ The messages you send to change a value are deleted after they are applied.
 /cookies - how to send cookies and their current status
 /removecookies - delete your saved cookies
 /storage - admin only, access state and disk usage by category
+/error - admin only, the last logged error
 /lock - admin only, only the admin can use the bot
 /unlock - admin only, anyone can use the bot again
 

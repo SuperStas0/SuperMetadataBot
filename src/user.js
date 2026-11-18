@@ -5,6 +5,7 @@ import { Files } from "./files.js";
 import { Audio, AudioSource } from "./audio.js";
 import { Menus } from "./menus.js";
 import { Network } from "./network.js";
+import { Log } from "./log.js";
 
 
 export class User {
@@ -136,7 +137,7 @@ export class User {
             this.status = "default";
         }
         catch (error) {
-            console.log(error);
+            Log.error(`Load ${url} (user ${this.id})`, error);
             if (Network.needsCookies(error)) this.decline(this.getBlockedText());
             else this.decline(`Failed to load: ${url}`);
             return false;
@@ -180,7 +181,7 @@ export class User {
             this.searchMenu = msg.message_id;
         }
         catch (error) {
-            console.log(error);
+            Log.error(`Search ${query} (user ${this.id})`, error);
             this.clearStatus();
             this.status = previous;
             this.notify(Network.needsCookies(error) ? this.getBlockedText() : `Search failed: ${query}`);
@@ -307,7 +308,7 @@ export class User {
             await this.sendMenu("new");
         }
         catch (error) {
-            console.log(error);
+            Log.error(`Load file ${title} (user ${this.id})`, error);
             this.fail(previous, error.message == "Audio is too long" ? "Audio is too long" : `Failed to load: ${title}`);
         }
     }
@@ -359,7 +360,7 @@ export class User {
             await Network.uploadFile(this.id, audioPath, {title: title, performer: audio.performer, duration: duration, thumbnail: poster && {source: poster}});
         }
         catch (error) {
-            console.log(error);
+            Log.error(`Send ${title} (user ${this.id})`, error);
             App.app.telegram.sendMessage(this.id, `Failed to send: ${title}`).catch(() => {});
         }
         Files.delete(audioPath);
@@ -379,7 +380,7 @@ export class User {
                 return;
             }
             catch (error) {
-                console.log(error);
+                Log.error(`Send source (user ${this.id})`, error);
             }
         }
         this.updateStatus(`Uploading: ${source.title}`);
@@ -442,7 +443,7 @@ export class User {
             }
             catch (error) {
                 if (!error.response?.description?.includes("message is not modified")) {
-                    console.log(error);
+                    Log.error(`Menu ${mode} (user ${this.id})`, error);
                 }
             }
         }
@@ -467,7 +468,7 @@ export class User {
                     await App.app.telegram.editMessageText(this.id, this.menu, null, menuText, Menus.DefaultOnly);
                 }
                 catch (error) {
-                    if (!error.response?.description?.includes("no text in the message to edit")) console.log(error);
+                    if (!error.response?.description?.includes("no text in the message to edit")) Log.error(`Menu ${mode} (user ${this.id})`, error);
                     App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
                     var msg = await App.app.telegram.sendMessage(this.id, menuText, Menus.DefaultOnly);
                     this.menu = msg.message_id;
@@ -489,7 +490,7 @@ export class User {
             return true;
         }
         catch (error) {
-            console.log(error);
+            Log.error(`SponsorBlock ${source.url} (user ${this.id})`, error);
             return false;
         }
     }
@@ -543,7 +544,7 @@ export class User {
             await App.app.telegram.editMessageText(this.id, this.menu, null, text, markup);
         }
         catch (error) {
-            if (!error.response?.description?.includes("message is not modified")) console.log(error);
+            if (!error.response?.description?.includes("message is not modified")) Log.error(`Edit menu (user ${this.id})`, error);
         }
     }
 
@@ -614,7 +615,7 @@ export class User {
             this.notify("Cookies saved");
         }
         catch (error) {
-            console.log(error);
+            Log.error(`Save cookies (user ${this.id})`, error);
             this.notify("Failed to save cookies");
         }
     }
@@ -667,7 +668,7 @@ export class User {
             this.confirm = msg.message_id;
         }
         catch (error) {
-            console.log(error);
+            Log.error(`Playlist ${lists[0]} (user ${this.id})`, error);
             this.decline(Network.needsCookies(error) ? this.getBlockedText() : `Failed to load: ${lists[0]}`);
         }
     }
@@ -722,7 +723,7 @@ export class User {
             if (audio.posterSquare) await this.getPosterFile();
         }
         catch (error) {
-            console.log(error);
+            Log.error(`Square poster (user ${this.id})`, error);
             audio.posterSquare = false;
             return this.updateStatus("Failed to make the poster square");
         }

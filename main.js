@@ -4,6 +4,7 @@ import { User } from "./src/user.js";
 import { Utility } from "./src/utility.js";
 import { Audio } from "./src/audio.js";
 import { Menus } from "./src/menus.js";
+import { Log } from "./src/log.js";
 import { Telegraf, Markup} from "telegraf";
 import filters from "telegraf/filters";
 
@@ -27,13 +28,14 @@ export class App {
             Files.cleanCache(this.cacheAge, this.cacheFolderAge, this.cacheSize);
         }
         catch (error) {
-            console.log(error);
+            Log.error("Clean cache", error);
         }
     }
 
     static async start() {
-        process.on("unhandledRejection", error => console.log(error));
-        this.app.catch(error => console.log(error));
+        Log.secrets = [Files.config.botToken, Files.config.apiHash, Files.config.sessionId].filter(secret => secret).map(secret => String(secret));
+        process.on("unhandledRejection", error => Log.error("Unhandled rejection", error));
+        this.app.catch(error => Log.error("Bot handler", error));
 
         if (!Network.ytdlp.ffmpegPath || !Files.exists(Network.ytdlp.ffmpegPath)) throw new Error("ffmpeg binary not found, run npm install");
         Files.setFfmpegPath(Network.ytdlp.ffmpegPath);
@@ -239,6 +241,13 @@ export class App {
             user.notify(`Access: ${Files.settings.locked ? "admin only" : "everyone"}\n${Utility.getStorageText(Files.getStorage(), Files.getFreeSpace(), App.cacheSize)}`);
         })
 
+        this.app.command("error", async ctx => {
+            if (ctx.chat.type != "private") return;
+            var user = User.getUser(ctx);
+            if (!user.isAdmin()) return user.notify("Only admin can view errors");
+            user.notify(Log.last() ?? "No errors logged");
+        })
+
         this.app.command("lock", async ctx => {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
@@ -387,7 +396,7 @@ export class App {
 
     static {
         this.start().catch(error => {
-            console.log(error);
+            Log.error("Start", error);
             process.exit(1);
         });
     }
