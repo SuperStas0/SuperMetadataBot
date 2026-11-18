@@ -238,7 +238,7 @@ export class App {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
             if (!user.isAdmin()) return user.notify("Only admin can check the storage");
-            user.notify(`Access: ${Files.settings.locked ? "admin only" : "everyone"}\n${Utility.getStorageText(Files.getStorage(), Files.getFreeSpace(), App.cacheSize)}`);
+            user.notify(`Access: ${Files.settings.locked ? "admin only" : "everyone"}\nShared cookies: ${Files.settings.shareCookies ? "on" : "off"}\n${Utility.getStorageText(Files.getStorage(), Files.getFreeSpace(), App.cacheSize)}`);
         })
 
         this.app.command("error", async ctx => {
@@ -266,6 +266,25 @@ export class App {
             user.notify("Bot is open, anyone can use it. Send /lock to restrict it to the admin");
         })
 
+        this.app.command("sharecookies", async ctx => {
+            if (ctx.chat.type != "private") return;
+            var user = User.getUser(ctx);
+            if (!user.isAdmin()) return user.notify("Only admin can change cookie sharing");
+            if (!user.hasCookies()) return user.notify("Send your YouTube cookies first, see /cookies");
+            Files.settings.shareCookies = true;
+            Files.saveSettings();
+            user.notify("Your cookies are shared. Users without their own cookies will use your YouTube account when YouTube asks for a login. Send /unsharecookies to stop");
+        })
+
+        this.app.command("unsharecookies", async ctx => {
+            if (ctx.chat.type != "private") return;
+            var user = User.getUser(ctx);
+            if (!user.isAdmin()) return user.notify("Only admin can change cookie sharing");
+            Files.settings.shareCookies = false;
+            Files.saveSettings();
+            user.notify("Your cookies are not shared. Users have to send their own. Send /sharecookies to share yours");
+        })
+
         this.app.command("help", async ctx => {
             ctx.reply(Files.helpText, Menus.Simple);
         })
@@ -273,7 +292,7 @@ export class App {
         this.app.command("cookies", async ctx => {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
-            ctx.reply(`${Files.cookiesText}\nCookies: *${user.hasCookies() ? "saved" : "not saved"}*`, Menus.Simple);
+            ctx.reply(`${Files.cookiesText}\nCookies: *${user.hasCookies() ? "saved" : "not saved"}*${!user.hasCookies() && user.getCookies() ? "\n_The bot admin shares their cookies with you, sending your own is optional_" : ""}`, Menus.Simple);
         })
 
         this.app.command("removecookies", async ctx => {

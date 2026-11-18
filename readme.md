@@ -38,6 +38,8 @@ Some videos need a YouTube login: age restricted ones, and any video when YouTub
 2. Send the file to the bot. Only YouTube and Google cookies are kept.
 3. Send `/removecookies` to delete them.
 
+The admin can let users without cookies use the admin cookies with `/sharecookies` and stop it with `/unsharecookies`, the state is saved to `static\settings.json`.
+
 # Building
 Requirements:
 - Node.js 22 or newer (installed automatically if missing)

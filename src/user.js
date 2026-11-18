@@ -68,7 +68,7 @@ export class User {
         var url = audio.source.url;
         var path = this.getSourcePath();
         var admin = this.isAdmin();
-        var own = this.hasCookies() ? this.getCookiesPath() : null;
+        var own = this.getCookies();
         var cookies = null;
         var file;
 
@@ -167,7 +167,7 @@ export class User {
         this.removeSearch();
         this.updateStatus(`Searching: ${query}`);
         try {
-            var own = this.hasCookies() ? this.getCookiesPath() : null;
+            var own = this.getCookies();
             var results = await Utility.timeout(Network.fetchSearch(query).catch(error => {
                 if (!own || !Network.needsCookies(error)) throw error;
                 return Network.fetchSearch(query, own);
@@ -594,6 +594,13 @@ export class User {
         return App.app.telegram.sendMessage(this.id, text).catch(() => {});
     }
 
+    getCookies() {
+        if (this.hasCookies()) return this.getCookiesPath();
+        if (!Files.settings.shareCookies || this.isAdmin()) return null;
+        var shared = Files.path("downloads", "users", String(Files.config.admin), "cookies.txt");
+        return Files.exists(shared) ? shared : null;
+    }
+
     hasCookies() {
         return Files.exists(this.getCookiesPath());
     }
@@ -677,7 +684,7 @@ export class User {
      * @param {string} url
      */
     async fetchList(url) {
-        var own = this.hasCookies() ? this.getCookiesPath() : null;
+        var own = this.getCookies();
         try {
             return await Network.fetchPlaylist(url);
         }

@@ -32,11 +32,13 @@ The messages you send to change a value are deleted after they are applied.
 /removecookies - delete your saved cookies
 /storage - admin only, access state and disk usage by category
 /error - admin only, the last logged error
+/sharecookies - admin only, users without their own cookies use the admin cookies
+/unsharecookies - admin only, stop sharing the admin cookies
 /lock - admin only, only the admin can use the bot
 /unlock - admin only, anyone can use the bot again
 
 *Cookies*
-YouTube asks for a login on age restricted videos and when it blocks the server as a bot. Use /cookies for the export steps.
+YouTube asks for a login on age restricted videos and when it blocks the server as a bot. Use /cookies for the export steps. If the bot admin shares their cookies, they are used for you when you have none.
 
 *Notes*
 The bot only works in DMs.
