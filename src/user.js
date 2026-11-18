@@ -548,11 +548,33 @@ export class User {
         }
     }
 
+    getAudios() {
+        return this.mode == "playlist" ? this.playlist : [this.audio];
+    }
+
+    /**
+     * @param {string | null} performer
+     */
+    setPerformer(performer) {
+        for (var audio of this.getAudios()) audio.performer = performer;
+    }
+
+    resetPerformer() {
+        for (var audio of this.getAudios()) audio.performer = audio.source.performer;
+    }
+
     /**
      * @param {"default"| {} & string | null} mode
      */
-    setPoster(mode) {
-        var audio = this.getAudio();
+    applyPoster(mode) {
+        for (var audio of this.getAudios()) this.setPoster(mode == "default" && !Files.exists(audio.source.path, "poster.jpg") ? null : mode, audio);
+    }
+
+    /**
+     * @param {"default"| {} & string | null} mode
+     * @param {Audio} [audio]
+     */
+    setPoster(mode, audio = this.getAudio()) {
         if (!mode) audio.poster = null;
         else if (mode == "default") {
             audio.poster = "default";
@@ -574,7 +596,7 @@ export class User {
         if (!fileLink || !await Network.downloadImage(fileLink, this.getPosterPath()).catch(() => false)) return this.updateStatus("Failed to download poster");
         this.clearStatus();
         Files.delete(this.getPosterPath().replace(/\.jpg$/, "-square.jpg"));
-        this.setPoster(fileId);
+        this.applyPoster(fileId);
         this.sendMenu("poster");
     }
 
@@ -725,13 +747,16 @@ export class User {
     async toggleSquare() {
         var audio = this.getAudio();
         if (this.status != "poster" || !audio.poster) return;
-        audio.posterSquare = !audio.posterSquare;
+        var value = !audio.posterSquare;
+        var changed = this.getAudios().filter(item => item.poster);
+        var previous = changed.map(item => item.posterSquare);
+        changed.forEach(item => item.posterSquare = value);
         try {
-            if (audio.posterSquare) await this.getPosterFile();
+            if (value) await this.getPosterFile();
         }
         catch (error) {
             Log.error(`Square poster (user ${this.id})`, error);
-            audio.posterSquare = false;
+            changed.forEach((item, index) => item.posterSquare = previous[index]);
             return this.updateStatus("Failed to make the poster square");
         }
         this.sendMenu("poster");
@@ -752,7 +777,7 @@ export class User {
     }
 
     getPosterPath() {
-        return Files.path(this.getUserPath(), this.mode == "playlist" ? `poster${this.playlistId}.jpg` : "poster.jpg");
+        return Files.path(this.getUserPath(), this.mode == "playlist" ? "poster-batch.jpg" : "poster.jpg");
     }
 
     getInfo() {

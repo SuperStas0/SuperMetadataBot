@@ -31,9 +31,9 @@ export class Menus {
         var row = -1;
         for (var index = 0; index < suggestions; index++) {
             if (index % 4 == 0) row++;
-            buttons.push([`Add ${index + 1}`, `cutAdd:${index}`, row]);
+            buttons.push([`Apply ${index + 1}`, `cutAdd:${index}`, row]);
         }
-        if (suggestions > 1) buttons.push(["Add all", "cutsAddAll", ++row]);
+        if (suggestions > 1) buttons.push(["Apply all", "cutsAddAll", ++row]);
         for (var index = 0; index < cuts; index++) {
             if (index % 4 == 0) row++;
             buttons.push([`Remove ${index + 1}`, `cutRemove:${index}`, row]);

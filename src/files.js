@@ -234,7 +234,7 @@ export class Files {
         for (var user of this.list(this.path("downloads", "users"))) {
             for (var name of this.list(this.path("downloads", "users", user))) {
                 var path = this.path("downloads", "users", user, name);
-                if (/^poster\d*(-square)?\.jpg$/.test(name) && now - fs.statSync(path).mtimeMs > maxAge) this.tryDelete(path);
+                if (/^poster(\d*|-batch)(-square)?\.jpg$/.test(name) && now - fs.statSync(path).mtimeMs > maxAge) this.tryDelete(path);
             }
         }
     }

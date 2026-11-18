@@ -84,12 +84,12 @@ export class App {
             ctx.answerCbQuery().catch(() => {});
             var user = User.getUser(ctx);
             if (user.status == "poster") {
-                user.setPoster(null);
+                user.applyPoster(null);
                 user.sendMenu("poster");
                 return;
             }
             if (user.status == "performer") {
-                user.getAudio().performer = null;
+                user.setPerformer(null);
                 user.sendMenu("default");
                 return;
             }
@@ -100,12 +100,12 @@ export class App {
             var user = User.getUser(ctx);
             if (user.status == "poster") {
                 if (!user.hasDefaultPoster()) return user.updateStatus("This audio has no default poster");
-                user.setPoster("default");
+                user.applyPoster("default");
                 user.sendMenu("poster");
                 return;
             }
             if (user.status == "performer") {
-                user.getAudio().performer = user.getAudio().source.performer;
+                user.resetPerformer();
                 user.sendMenu("default");
                 return;
             }
@@ -333,7 +333,7 @@ export class App {
             }
             else if (user.status == "performer") {
                 if (ctx.message.text.length > User.textLimit) return user.updateStatus("Performer is too long");
-                user.getAudio().performer = ctx.message.text;
+                user.setPerformer(ctx.message.text);
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
                 user.sendMenu("default");
             }
