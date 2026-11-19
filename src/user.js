@@ -15,6 +15,8 @@ export class User {
 
     static maxCuts = 10;
 
+    static batchDelay = 1500;
+
     static maxSuggestions = 8;
 
     static categoryNames = {sponsor: "Sponsor", selfpromo: "Self promotion", interaction: "Interaction reminder", intro: "Intro", outro: "Outro", preview: "Preview", music_offtopic: "Non-music", filler: "Filler"};
@@ -46,6 +48,9 @@ export class User {
         this.results = null;
         /** @type {number | null} */
         this.searchMenu = null;
+        /** @type {TelegramFile[]} */
+        this.incoming = [];
+        this.incomingTimer = null;
         /** @type {string | null} */
         this.askQuery = null;
         /** @type {number | null} */
@@ -234,7 +239,102 @@ export class User {
         if (this.status == "loading") return this.updateStatus("Please wait for previous request to finish");
         if (this.status != "none" && this.status != "default") return;
         if (file.size > Network.telegramFileLimit) return this.notify(`File is over the ${Network.telegramFileLimit / 1024 / 1024} MB limit for files sent to a bot`);
-        this.parseFile(file);
+        this.incoming.push(file);
+        clearTimeout(this.incomingTimer);
+        this.incomingTimer = setTimeout(() => this.processIncoming(), User.batchDelay);
+    }
+
+    processIncoming() {
+        var files = this.incoming;
+        this.incoming = [];
+        if (this.status == "loading") return this.updateStatus("Please wait for previous request to finish");
+        if (this.status != "none" && this.status != "default") return;
+        if (!this.isAdmin() && files.length > User.maxPlaylist) return this.notify(`Too many files: ${files.length}, send up to ${User.maxPlaylist} at once`);
+        if (files.length == 1) this.parseFile(files[0]);
+        else if (files.length > 1) this.parseFiles(files);
+    }
+
+    /**
+     * @param {string} text
+     */
+    static expected(text) {
+        return Object.assign(new Error(text), {user: true});
+    }
+
+    /**
+     * @param {TelegramFile} file
+     */
+    static getFileTitle(file) {
+        return (file.title || file.name?.replace(/\.[^.]+$/, "") || "Audio").slice(0, User.textLimit);
+    }
+
+    /**
+     * @param {TelegramFile} file
+     * @returns {Promise<AudioSource>}
+     */
+    async importFile(file) {
+        var title = User.getFileTitle(file);
+        var performer = file.performer ? file.performer.slice(0, User.textLimit) : null;
+        var path = Files.path("downloads", "telegram", file.uniqueId);
+
+        if (!Files.exists(path, "audio.m4a") && Files.getFreeSpace() < Network.minFreeSpace) {
+            App.clean(true);
+            if (Files.getFreeSpace() < Network.minFreeSpace) throw User.expected("Not enough free space on the server, try again later");
+        }
+
+        await Utility.lock(path, async () => {
+            var best = Files.path(path, "audio.m4a");
+            if (Files.exists(path, "data.json") && Files.exists(best)) return Files.touch(best);
+
+            Files.createFolder(path);
+            var link = String(await App.app.telegram.getFileLink(file.id));
+            var ext = extname(new URL(link).pathname).toLowerCase();
+            if (!/^\.[a-z0-9]{1,5}$/.test(ext)) ext = ".bin";
+            var original = Files.path(path, `original${ext}`);
+            var temp = Files.path(path, "tmp-audio.m4a");
+            try {
+                var buffer = await Network.downloadFile(link, Network.telegramFileLimit, Network.fileTimeout);
+                if (!buffer) throw new Error("Failed to download the file");
+                Files.write(original, buffer);
+                var duration;
+                try {
+                    duration = await Files.importAudio(original, temp, ext == ".m4a");
+                }
+                catch (error) {
+                    if (ext != ".m4a") throw error;
+                    duration = await Files.importAudio(original, temp, false);
+                }
+                if (!duration) throw new Error("Failed to read the audio duration");
+                if (duration > Network.maxDuration) throw User.expected("Audio is too long");
+                Files.move(temp, best);
+                await Files.extractCover(original, Files.path(path, "poster.jpg")).catch(() => {});
+                Files.saveAudio(path, Object.assign(new AudioSource(), {title: title, performer: performer, duration: duration}));
+            }
+            finally {
+                Files.tryDelete(original);
+                Files.tryDelete(temp);
+            }
+        })
+
+        var source = Files.loadAudio(path);
+        source.url = file.uniqueId;
+        source.file = "audio.m4a";
+        source.title = title;
+        source.performer = performer;
+        source.uploaded = true;
+        if (Files.getFileSize(Files.path(path, source.file)) >= Network.botFileLimit && !this.isAdmin()) throw User.expected(`This audio is over the ${Network.botFileLimit / 1024 / 1024} MB limit of this bot. Host your own bot to remove the limit: https://github.com/SuperStas0/SuperMetadata`);
+        return source;
+    }
+
+    /**
+     * @param {AudioSource} source
+     */
+    createAudio(source) {
+        var audio = new Audio();
+        audio.source = source;
+        audio.performer = source.performer;
+        this.setPoster(Files.exists(source.path, "poster.jpg") ? "default" : null, audio);
+        return audio;
     }
 
     /**
@@ -242,75 +342,57 @@ export class User {
      */
     async parseFile(file) {
         var previous = this.status;
-        var title = (file.title || file.name?.replace(/\.[^.]+$/, "") || "Audio").slice(0, User.textLimit);
-        var performer = file.performer ? file.performer.slice(0, User.textLimit) : null;
-        var path = Files.path("downloads", "telegram", file.uniqueId);
-        var admin = this.isAdmin();
+        var title = User.getFileTitle(file);
         this.status = "loading";
         this.updateStatus(`Loading: ${title}`);
 
         try {
-            if (!Files.exists(path, "audio.m4a") && Files.getFreeSpace() < Network.minFreeSpace) {
-                App.clean(true);
-                if (Files.getFreeSpace() < Network.minFreeSpace) return this.fail(previous, "Not enough free space on the server, try again later");
-            }
-
-            await Utility.lock(path, async () => {
-                var best = Files.path(path, "audio.m4a");
-                if (Files.exists(path, "data.json") && Files.exists(best)) return Files.touch(best);
-
-                Files.createFolder(path);
-                var link = String(await App.app.telegram.getFileLink(file.id));
-                var ext = extname(new URL(link).pathname).toLowerCase();
-                if (!/^\.[a-z0-9]{1,5}$/.test(ext)) ext = ".bin";
-                var original = Files.path(path, `original${ext}`);
-                var temp = Files.path(path, "tmp-audio.m4a");
-                try {
-                    var buffer = await Network.downloadFile(link, Network.telegramFileLimit, Network.fileTimeout);
-                    if (!buffer) throw new Error("Failed to download the file");
-                    Files.write(original, buffer);
-                    var duration;
-                    try {
-                        duration = await Files.importAudio(original, temp, ext == ".m4a");
-                    }
-                    catch (error) {
-                        if (ext != ".m4a") throw error;
-                        duration = await Files.importAudio(original, temp, false);
-                    }
-                    if (!duration) throw new Error("Failed to read the audio duration");
-                    if (duration > Network.maxDuration) throw new Error("Audio is too long");
-                    Files.move(temp, best);
-                    await Files.extractCover(original, Files.path(path, "poster.jpg")).catch(() => {});
-                    Files.saveAudio(path, Object.assign(new AudioSource(), {title: title, performer: performer, duration: duration}));
-                }
-                finally {
-                    Files.tryDelete(original);
-                    Files.tryDelete(temp);
-                }
-            })
-
-            var source = Files.loadAudio(path);
-            source.url = file.uniqueId;
-            source.file = "audio.m4a";
-            source.title = title;
-            source.performer = performer;
-            if (Files.getFileSize(Files.path(path, source.file)) >= Network.botFileLimit && !admin) return this.fail(previous, `This audio is over the ${Network.botFileLimit / 1024 / 1024} MB limit of this bot. Host your own bot to remove the limit: https://github.com/SuperStas0/SuperMetadata`);
-
+            var source = await this.importFile(file);
             this.removeSearch();
             this.mode = "telegram";
-            this.audio = new Audio();
-            this.audio.source = source;
-            this.audio.performer = performer;
-            this.setPoster(Files.exists(path, "poster.jpg") ? "default" : null);
+            this.audio = this.createAudio(source);
             App.clean(true);
             this.clearStatus();
             this.status = "default";
             await this.sendMenu("new");
         }
         catch (error) {
-            Log.error(`Load file ${title} (user ${this.id})`, error);
-            this.fail(previous, error.message == "Audio is too long" ? "Audio is too long" : `Failed to load: ${title}`);
+            if (!error.user) Log.error(`Load file ${title} (user ${this.id})`, error);
+            this.fail(previous, error.user ? error.message : `Failed to load: ${title}`);
         }
+    }
+
+    /**
+     * @param {TelegramFile[]} files
+     */
+    async parseFiles(files) {
+        var previous = this.status;
+        var audios = [];
+        var failed = [];
+        this.status = "loading";
+
+        for (var file of files) {
+            var title = User.getFileTitle(file);
+            this.updateStatus(`Loading ${audios.length + failed.length + 1}/${files.length}: ${title}`);
+            try {
+                audios.push(this.createAudio(await this.importFile(file)));
+            }
+            catch (error) {
+                if (!error.user) Log.error(`Load file ${title} (user ${this.id})`, error);
+                failed.push(error.user ? `${title}: ${error.message}` : title);
+            }
+        }
+
+        if (!audios.length) return this.fail(previous, `Failed to load: ${failed.join(", ")}`);
+        if (failed.length) this.notify(`Failed to load: ${failed.join(", ")}`);
+        this.removeSearch();
+        this.mode = "playlist";
+        this.playlist = audios;
+        this.playlistId = 0;
+        App.clean(true);
+        this.clearStatus();
+        this.status = "default";
+        await this.sendMenu("new");
     }
 
     /**
@@ -578,7 +660,7 @@ export class User {
         if (!mode) audio.poster = null;
         else if (mode == "default") {
             audio.poster = "default";
-            audio.posterSquare = this.mode != "telegram";
+            audio.posterSquare = !audio.source.uploaded;
         }
         else {
             audio.poster = "custom";
@@ -796,7 +878,7 @@ export class User {
         info.text += `Title: \`${info.title}\`\n`;
         info.text += info.performer ? `Performer: \`${info.performer}\`\n` : "No performer\n";
         info.text += `Duration: \`${Utility.getDurationString(info.duration)}\`\n`;
-        info.text += info.poster ? `Poster: ${{"default": this.mode == "telegram" ? "Original" : "Youtube", "custom": "Custom"}[info.poster]}${audio.posterSquare ? ", square" : ""}` : "No poster";
+        info.text += info.poster ? `Poster: ${{"default": audio.source.uploaded ? "Original" : "Youtube", "custom": "Custom"}[info.poster]}${audio.posterSquare ? ", square" : ""}` : "No poster";
         if (info.cuts.length) info.text += `\nCuts: ${info.cuts.length}, new duration \`${Utility.getDurationString(Utility.getDuration(info.duration, info.cuts))}\``;
 
         return info;

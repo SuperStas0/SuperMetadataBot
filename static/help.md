@@ -3,7 +3,7 @@ Send a YouTube link and the bot loads its audio as m4a.
 Send several links in one message to load them as a batch, up to 10 at once.
 Send a YouTube playlist link to load all its videos as a batch. The bot shows the video count and asks for confirmation first, a long playlist may take a long time to load. The same batch limit applies.
 Send `/search query` to search YouTube. Any other text message makes the bot ask to confirm the search with a Yes button, any other action removes that question. The bot shows the first 5 results sorted by views, with the channel, views and duration. Press the number of a result to load it.
-Send an audio or a music file to the bot to edit your own file, up to 20 MB, the Telegram bot download limit. Any format ffmpeg reads works, the result is m4a. Files other than m4a are converted to 192 kbit/s AAC. The title, performer and embedded cover are taken from the file.
+Send an audio or a music file to the bot to edit your own file, up to 20 MB, the Telegram bot download limit. Send several files at once, or as an album, to load them as a batch, up to 10 at once, the batch rules below apply. Any format ffmpeg reads works, the result is m4a. Files other than m4a are converted to 192 kbit/s AAC. The title, performer and embedded cover are taken from the file.
 Live streams and videos longer than 4 hours are not supported.
 Audio is limited to 50 MB, the Telegram bot upload limit. Quality is lowered to fit, videos that still do not fit are declined.
 Loaded audio is cached on the server, repeated links load faster.

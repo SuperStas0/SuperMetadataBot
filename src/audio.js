@@ -60,5 +60,8 @@ export class AudioSource {
 
         /** @type {Segment[] | null} */
         this.segments = null;
+
+        /** @type {boolean} */
+        this.uploaded = false;
     }
 }
