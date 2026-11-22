@@ -90,13 +90,31 @@ export class History {
     }
 
     /**
+     * @param {any} text
+     * @param {string} fallback
+     */
+    static clean(text, fallback) {
+        return Utility.escapeCode(String(text ?? "").replace(/\s+/g, " ").trim() || fallback);
+    }
+
+    /**
      * @param {HistoryEntry} entry
      */
     static format(entry) {
-        var name = String(entry.performer ? `${entry.title} - ${entry.performer}` : entry.title ?? "").replace(/\s+/g, " ");
-        var time = new Date(entry.time).toISOString().slice(0, 16).replace("T", " ");
-        var changes = entry.changes ? (entry.changes.length ? entry.changes.join("; ").replace(/\s+/g, " ") : "none") : "not sent";
-        return [`/log_${entry.id} ${name}`, `User: ${entry.user || "unknown"}, ${entry.userId}`, `Source: ${entry.upload ? "upload" : "YouTube"}, ${time} UTC`, `Changes: ${changes}`].join("\n");
+        return `/log\\_${entry.id} \`${this.clean(entry.user, "unknown")}\`: \`${this.clean(entry.title, "none")}\``;
+    }
+
+    /**
+     * @param {HistoryEntry} entry
+     * @returns {{text: string, length: number}} text in MarkdownV2 and its length without the markup
+     */
+    static getDetails(entry) {
+        var changes = entry.changes ? (entry.changes.length ? entry.changes.join("; ") : "none") : "not sent";
+        var fields = [["User", entry.user || "unknown"], ["User id", entry.userId], ["Title", entry.title]];
+        if (entry.performer) fields.push(["Performer", entry.performer]);
+        fields.push(["Source", entry.upload ? "upload" : "YouTube"], ["Loaded", `${new Date(entry.time).toISOString().slice(0, 16).replace("T", " ")} UTC`], ["Changes", changes]);
+        var length = fields.reduce((sum, [label, value]) => sum + label.length + String(value ?? "").length + 3, 0);
+        return {text: fields.map(([label, value]) => `${label}: \`${this.clean(value, "none")}\``).join("\n"), length: length};
     }
 
     /**
@@ -108,11 +126,11 @@ export class History {
         var page = "";
         for (var entry of this.entries.toReversed()) {
             var text = this.format(entry);
-            if (page && page.length + text.length + 2 > this.pageSize) {
+            if (page && page.length + text.length + 1 > this.pageSize) {
                 pages.push(page);
                 page = "";
             }
-            page += page ? `\n\n${text}` : text;
+            page += page ? `\n${text}` : text;
         }
         pages.push(page);
         return pages;

@@ -64,9 +64,9 @@ export class Utility {
     static getStorageText(groups, free, limit) {
         var total = groups.reduce((sum, group) => sum + group.size, 0);
         var audio = groups.filter(group => group.audio).reduce((sum, group) => sum + group.size, 0);
-        var lines = [`Used: ${this.getSizeString(total)}`, `Free on disk: ${this.getSizeString(free)}`, `Cached audio: ${this.getSizeString(audio)} of ${this.getSizeString(limit)} limit`, ""];
+        var lines = [`Used: \`${this.getSizeString(total)}\``, `Free on disk: \`${this.getSizeString(free)}\``, `Cached audio: \`${this.getSizeString(audio)} of ${this.getSizeString(limit)} limit\``, ""];
         for (var group of groups.filter(group => group.count).sort((first, second) => second.size - first.size)) {
-            lines.push(`${group.name}: ${this.getSizeString(group.size)}, ${Math.round(group.size / (total || 1) * 100)}%, ${group.count} files`);
+            lines.push(`${group.name}: \`${this.getSizeString(group.size)}, ${Math.round(group.size / (total || 1) * 100)}%, ${group.count} files\``);
         }
         return lines.join("\n");
     }

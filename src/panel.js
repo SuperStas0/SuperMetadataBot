@@ -27,7 +27,7 @@ export class Panel {
     static requests = {};
 
     static main() {
-        return {text: "Admin panel", markup: Menus.GeneratePlain(["Log", "panel:log:0", 0], ["Storage", "panel:storage", 0], ["Settings", "panel:settings", 1], ["Delete audio", "panel:delete", 1], ["Close", "panel:close", 2])};
+        return {text: "Admin panel", markup: Menus.GenerateMarkup(["Log", "panel:log:0", 0], ["Storage", "panel:storage", 0], ["Settings", "panel:settings", 1], ["Delete audio", "panel:delete", 1], ["Close", "panel:close", 2])};
     }
 
     /**
@@ -40,23 +40,26 @@ export class Panel {
         if (page > 0) buttons.push(["Previous", `panel:log:${page - 1}`, 0]);
         if (page < pages.length - 1) buttons.push(["Next", `panel:log:${page + 1}`, 0]);
         buttons.push(["Back", "panel:main", buttons.length ? 1 : 0]);
-        return {text: pages.length > 1 ? `${pages[page]}\n\nPage ${page + 1}/${pages.length}` : pages[page], markup: Menus.GeneratePlain(...buttons)};
+        return {text: pages.length > 1 ? `${pages[page]}\n\nPage ${page + 1}/${pages.length}` : pages[page], markup: Menus.GenerateMarkup(...buttons)};
     }
 
     static storage() {
-        return {text: Utility.getStorageText(Files.getStorage(), Files.getFreeSpace(), App.cacheSize), markup: Menus.GeneratePlain(["Refresh", "panel:storage", 0], ["Back", "panel:main", 1])};
+        return {text: Utility.getStorageText(Files.getStorage(), Files.getFreeSpace(), App.cacheSize), markup: Menus.GenerateMarkup(["Refresh", "panel:storage", 0], ["Back", "panel:main", 1])};
     }
 
     static settings() {
         var settings = Files.settings;
-        var buttons = [
-            [`Global access: ${settings.locked ? "off" : "on"}`, "panel:access", 0],
-            [`Cookie sharing: ${settings.shareCookies ? "on" : "off"}`, "panel:cookies", 1],
-            [`Search confirmation: ${this.searchNames[settings.searchConfirm ?? "on"]}`, "panel:search", 2],
-            [`Large files: ${this.largeNames[settings.largeFiles ?? "off"]}`, "panel:large", 3],
-            ["Back", "panel:main", 4]
+        var styles = {on: "success", confirm: "primary", nonadmin: "primary", off: "danger"};
+        var states = [
+            ["Global access", "access", settings.locked ? "off" : "on", {on: "on", off: "off"}],
+            ["Cookie sharing", "cookies", settings.shareCookies ? "on" : "off", {on: "on", off: "off"}],
+            ["Search confirmation", "search", settings.searchConfirm ?? "on", this.searchNames],
+            ["Large files", "large", settings.largeFiles ?? "off", this.largeNames]
         ];
-        return {text: "Settings", markup: Menus.GeneratePlain(...buttons)};
+        var lines = states.map(([title, , state, names]) => `${title}: \`${Utility.escapeCode(names[state])}\``);
+        var buttons = states.map(([title, name, state], row) => [title, `panel:${name}`, row, styles[state]]);
+        buttons.push(["Back", "panel:main", states.length]);
+        return {text: `Settings\n${lines.join("\n")}`, markup: Menus.GenerateMarkup(...buttons)};
     }
 
     /**

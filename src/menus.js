@@ -2,7 +2,7 @@ import { Markup } from "telegraf";
 
 export class Menus {
     /**
-     * @param {[string, string, number][]} buttons
+     * @param {[string, string, number, ("primary" | "success" | "danger")?][]} buttons
      * @returns {Markup.Markup}
      */
     static GenerateMarkup(...buttons){
@@ -10,13 +10,13 @@ export class Menus {
     }
 
     /**
-     * @param {[string, string, number][]} buttons
+     * @param {[string, string, number, ("primary" | "success" | "danger")?][]} buttons
      */
     static GeneratePlain(...buttons){
         var rows = [];
-        buttons.forEach(([name, command, row]) => {
+        buttons.forEach(([name, command, row, style]) => {
             rows[row] ??= [];
-            rows[row].push(Markup.button.callback(name, command));
+            rows[row].push(style ? {...Markup.button.callback(name, command), style: style} : Markup.button.callback(name, command));
         });
         return {...Markup.inlineKeyboard(rows)};
     }

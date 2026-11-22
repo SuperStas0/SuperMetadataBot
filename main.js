@@ -261,9 +261,12 @@ export class App {
             if (!user.isAdmin()) return;
             var entry = History.get(Number(ctx.match[1]));
             if (!entry) return user.notify("Entry not found");
+            var details = History.getDetails(entry);
+            var extra = details.length <= 1000 ? {caption: details.text, parse_mode: "MarkdownV2"} : {};
             try {
-                if (entry.document) await this.app.telegram.sendDocument(user.id, entry.fileId);
-                else await this.app.telegram.sendAudio(user.id, entry.fileId);
+                if (entry.document) await this.app.telegram.sendDocument(user.id, entry.fileId, extra);
+                else await this.app.telegram.sendAudio(user.id, entry.fileId, extra);
+                if (!extra.caption) await this.app.telegram.sendMessage(user.id, details.text, {parse_mode: "MarkdownV2"});
             }
             catch (error) {
                 Log.error(`Send log entry ${entry.id}`, error);
