@@ -10,7 +10,9 @@
 
 /** @typedef {{id: string, title: string, channel: string, views: number | null, duration: number | null}} SearchResult */
 
-/** @typedef {{id: string, uniqueId: string, size?: number, name?: string, title?: string, performer?: string}} TelegramFile */
+/** @typedef {{id: string, uniqueId: string, size?: number, name?: string, title?: string, performer?: string, document?: boolean}} TelegramFile */
+
+/** @typedef {{id: number, time: number, userId: number, user: string, title: string, performer: string | null, upload: boolean, fileId: string, document: boolean, changes: string[] | null}} HistoryEntry */
 
 /** @typedef {Record<string, number | string>} ConfigFile */
 

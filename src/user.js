@@ -6,6 +6,7 @@ import { Audio, AudioSource } from "./audio.js";
 import { Menus } from "./menus.js";
 import { Network } from "./network.js";
 import { Log } from "./log.js";
+import { History } from "./history.js";
 
 
 export class User {
@@ -27,6 +28,8 @@ export class User {
     constructor (ctx){
         /** @type {number} */
         this.id = ctx.chat.id;
+        /** @type {string} */
+        this.name = "";
         this.statusMessage;
         /** @type {UserMode} */
         this.mode = "none";
@@ -138,6 +141,7 @@ export class User {
             this.clearStatus();
             var segments = this.mode == "playlist" ? null : this.loadSegments();
             await this.sendSource();
+            History.record(this, audio);
             if (segments && await segments && audio.source.segments.length) this.notify(`SponsorBlock: ${audio.source.segments.length} segments found, see Cuts`);
             this.status = "default";
         }
@@ -328,12 +332,14 @@ export class User {
 
     /**
      * @param {AudioSource} source
+     * @param {TelegramFile} file
      */
-    createAudio(source) {
+    createAudio(source, file) {
         var audio = new Audio();
         audio.source = source;
         audio.performer = source.performer;
         this.setPoster(Files.exists(source.path, "poster.jpg") ? "default" : null, audio);
+        History.record(this, audio, file);
         return audio;
     }
 
@@ -350,7 +356,7 @@ export class User {
             var source = await this.importFile(file);
             this.removeSearch();
             this.mode = "telegram";
-            this.audio = this.createAudio(source);
+            this.audio = this.createAudio(source, file);
             App.clean(true);
             this.clearStatus();
             this.status = "default";
@@ -375,7 +381,7 @@ export class User {
             var title = User.getFileTitle(file);
             this.updateStatus(`Loading ${audios.length + failed.length + 1}/${files.length}: ${title}`);
             try {
-                audios.push(this.createAudio(await this.importFile(file)));
+                audios.push(this.createAudio(await this.importFile(file), file));
             }
             catch (error) {
                 if (!error.user) Log.error(`Load file ${title} (user ${this.id})`, error);
@@ -440,6 +446,7 @@ export class User {
 
             var poster = audio.poster && await this.getPosterFile();
             await Network.uploadFile(this.id, audioPath, {title: title, performer: audio.performer, duration: duration, thumbnail: poster && {source: poster}});
+            History.update(audio);
         }
         catch (error) {
             Log.error(`Send ${title} (user ${this.id})`, error);
@@ -908,6 +915,14 @@ export class User {
 
     /**
      * @param {Context} ctx
+     */
+    static getName(ctx) {
+        var name = [ctx.from?.first_name, ctx.from?.last_name].filter(part => part).join(" ");
+        return ctx.from?.username ? `${name} (@${ctx.from.username})` : name;
+    }
+
+    /**
+     * @param {Context} ctx
      * @returns {User}
      */
     static getUser(ctx) {
@@ -916,6 +931,7 @@ export class User {
             App.data[id] = new User(ctx);
             Files.createFolder(App.data[id].getUserPath());
         }
+        App.data[id].name = User.getName(ctx);
         return App.data[id];
     }
 }

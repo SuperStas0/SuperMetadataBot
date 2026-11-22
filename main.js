@@ -5,6 +5,7 @@ import { Utility } from "./src/utility.js";
 import { Audio } from "./src/audio.js";
 import { Menus } from "./src/menus.js";
 import { Log } from "./src/log.js";
+import { History } from "./src/history.js";
 import { Telegraf, Markup} from "telegraf";
 import filters from "telegraf/filters";
 
@@ -21,6 +22,29 @@ export class App {
     static cacheFolderAge = 30 * 24 * 60 * 60 * 1000;
 
     static cacheSize = 5 * 1024 * 1024 * 1024;
+
+    /** @type {Set<number>} */
+    static clearing = new Set();
+
+    /**
+     * @param {number} id
+     */
+    static async clearKeyboard(id) {
+        if (Files.settings.cleared?.includes(id) || this.clearing.has(id)) return;
+        this.clearing.add(id);
+        try {
+            var msg = await this.app.telegram.sendMessage(id, ".", {reply_markup: {remove_keyboard: true}, disable_notification: true});
+            this.app.telegram.deleteMessage(id, msg.message_id).catch(() => {});
+            (Files.settings.cleared ??= []).push(id);
+            Files.saveSettings();
+        }
+        catch (error) {
+            Log.error(`Clear keyboard (user ${id})`, error);
+        }
+        finally {
+            this.clearing.delete(id);
+        }
+    }
 
     static clean(force) {
         try {
@@ -53,6 +77,7 @@ export class App {
                 else if (ctx.chat?.type == "private") ctx.reply("This bot is private").catch(() => {});
                 return;
             }
+            if (ctx.chat?.type == "private") this.clearKeyboard(ctx.chat.id);
             if (ctx.chat?.type == "private" && ctx.callbackQuery?.data != "searchYes") this.data[ctx.chat.id]?.removeAsk();
             try {
                 await next();
@@ -248,6 +273,29 @@ export class App {
             user.notify(Log.last() ?? "No errors logged");
         })
 
+        this.app.command("log", async ctx => {
+            if (ctx.chat.type != "private") return;
+            var user = User.getUser(ctx);
+            if (!user.isAdmin()) return;
+            for (var page of History.getPages()) await user.notify(page);
+        })
+
+        this.app.hears(/^\/log_(\d+)$/, async ctx => {
+            if (ctx.chat.type != "private") return;
+            var user = User.getUser(ctx);
+            if (!user.isAdmin()) return;
+            var entry = History.get(Number(ctx.match[1]));
+            if (!entry) return user.notify("Entry not found");
+            try {
+                if (entry.document) await this.app.telegram.sendDocument(user.id, entry.fileId);
+                else await this.app.telegram.sendAudio(user.id, entry.fileId);
+            }
+            catch (error) {
+                Log.error(`Send log entry ${entry.id}`, error);
+                user.notify("Failed to send the audio");
+            }
+        })
+
         this.app.command("lock", async ctx => {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
@@ -373,7 +421,7 @@ export class App {
                 user.setCookies(document);
             }
             else if (Utility.isAudioDocument(document)) {
-                user.loadFile({id: document.file_id, uniqueId: document.file_unique_id, size: document.file_size, name: document.file_name});
+                user.loadFile({id: document.file_id, uniqueId: document.file_unique_id, size: document.file_size, name: document.file_name, document: true});
             }
         })
 

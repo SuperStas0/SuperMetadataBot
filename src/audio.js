@@ -23,6 +23,9 @@ export class Audio {
 
         /** @type {boolean} */
         this.posterSquare = false;
+
+        /** @type {number | null} */
+        this.logId = null;
     }
 }
 

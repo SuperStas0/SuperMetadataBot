@@ -14,7 +14,7 @@ export class Files {
         if (missing.length) throw new Error(`static\\config.json is missing: ${missing.join(", ")}`);
     }
 
-    /** @type {{locked?: boolean, shareCookies?: boolean}} */
+    /** @type {{locked?: boolean, shareCookies?: boolean, cleared?: number[]}} */
     static settings = this.exists("static", "settings.json") ? this.load("static", "settings.json") : {};
 
     /** @type {string} */
