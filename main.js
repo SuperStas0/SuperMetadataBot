@@ -6,6 +6,7 @@ import { Audio } from "./src/audio.js";
 import { Menus } from "./src/menus.js";
 import { Log } from "./src/log.js";
 import { History } from "./src/history.js";
+import { Panel } from "./src/panel.js";
 import { Telegraf, Markup} from "telegraf";
 import filters from "telegraf/filters";
 
@@ -179,18 +180,6 @@ export class App {
             user.sendMenu("poster");
         })
 
-        this.app.action("delete", async ctx => {
-            var user = User.getUser(ctx);
-            if (!user.isAdmin()) return ctx.answerCbQuery("Only admin can delete audio from server", {show_alert: true});
-            ctx.answerCbQuery().catch(() => {});
-            if (user.status != "default" || user.mode != "youtube") return;
-            ctx.deleteMessage(user.menu).catch(() => {});
-            user.menu = null;
-            user.status = "none";
-            Files.delete(user.getSourcePath());
-            user.parseLink().then(() => user.sendMenu("new"));
-        })
-
         this.app.action("square", async ctx => {
             ctx.answerCbQuery().catch(() => {});
             var user = User.getUser(ctx);
@@ -259,25 +248,11 @@ export class App {
             user.search(query);
         })
 
-        this.app.command("storage", async ctx => {
-            if (ctx.chat.type != "private") return;
-            var user = User.getUser(ctx);
-            if (!user.isAdmin()) return user.notify("Only admin can check the storage");
-            user.notify(`Access: ${Files.settings.locked ? "admin only" : "everyone"}\nShared cookies: ${Files.settings.shareCookies ? "on" : "off"}\n${Utility.getStorageText(Files.getStorage(), Files.getFreeSpace(), App.cacheSize)}`);
-        })
-
         this.app.command("error", async ctx => {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
             if (!user.isAdmin()) return user.notify("Only admin can view errors");
             user.notify(Log.last() ?? "No errors logged");
-        })
-
-        this.app.command("log", async ctx => {
-            if (ctx.chat.type != "private") return;
-            var user = User.getUser(ctx);
-            if (!user.isAdmin()) return;
-            for (var page of History.getPages()) await user.notify(page);
         })
 
         this.app.hears(/^\/log_(\d+)$/, async ctx => {
@@ -296,41 +271,24 @@ export class App {
             }
         })
 
-        this.app.command("lock", async ctx => {
+        this.app.command("admin", async ctx => {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
-            if (!user.isAdmin()) return user.notify("Only admin can change the access");
-            Files.settings.locked = true;
-            Files.saveSettings();
-            user.notify("Bot is locked, only the admin can use it. Send /unlock to open it for everyone");
+            if (!user.isAdmin()) return;
+            Panel.open(user);
         })
 
-        this.app.command("unlock", async ctx => {
-            if (ctx.chat.type != "private") return;
+        this.app.action(/^panel:(\w+)(?::(\d+))?$/, async ctx => {
             var user = User.getUser(ctx);
-            if (!user.isAdmin()) return user.notify("Only admin can change the access");
-            Files.settings.locked = false;
-            Files.saveSettings();
-            user.notify("Bot is open, anyone can use it. Send /lock to restrict it to the admin");
+            if (!user.isAdmin()) return ctx.answerCbQuery().catch(() => {});
+            await Panel.handle(ctx, user, ctx.match[1], Number(ctx.match[2] ?? 0));
         })
 
-        this.app.command("sharecookies", async ctx => {
-            if (ctx.chat.type != "private") return;
+        this.app.action(/^large:(allow|deny):(\d+)$/, async ctx => {
             var user = User.getUser(ctx);
-            if (!user.isAdmin()) return user.notify("Only admin can change cookie sharing");
-            if (!user.hasCookies()) return user.notify("Send your YouTube cookies first, see /cookies");
-            Files.settings.shareCookies = true;
-            Files.saveSettings();
-            user.notify("Your cookies are shared. Users without their own cookies will use your YouTube account when YouTube asks for a login. Send /unsharecookies to stop");
-        })
-
-        this.app.command("unsharecookies", async ctx => {
-            if (ctx.chat.type != "private") return;
-            var user = User.getUser(ctx);
-            if (!user.isAdmin()) return user.notify("Only admin can change cookie sharing");
-            Files.settings.shareCookies = false;
-            Files.saveSettings();
-            user.notify("Your cookies are not shared. Users have to send their own. Send /sharecookies to share yours");
+            if (!user.isAdmin()) return ctx.answerCbQuery().catch(() => {});
+            var done = Panel.answer(Number(ctx.match[2]), ctx.match[1] == "allow");
+            ctx.answerCbQuery(done ? undefined : "Request expired").catch(() => {});
         })
 
         this.app.command("help", async ctx => {

@@ -7,6 +7,7 @@ import { Menus } from "./menus.js";
 import { Network } from "./network.js";
 import { Log } from "./log.js";
 import { History } from "./history.js";
+import { Panel } from "./panel.js";
 
 
 export class User {
@@ -76,6 +77,7 @@ export class User {
         var url = audio.source.url;
         var path = this.getSourcePath();
         var admin = this.isAdmin();
+        var large = admin || (Files.settings.largeFiles ?? "off") != "off";
         var own = this.getCookies();
         var cookies = null;
         var file;
@@ -100,7 +102,7 @@ export class User {
         this.updateStatus(`Fetching: ${url}`);
 
         try {
-            await Utility.lock(path, async () => {
+            var fetchFiles = () => Utility.lock(path, async () => {
                 var tasks = [];
 
                 Files.createFolder(path);
@@ -112,29 +114,35 @@ export class User {
                 }
 
                 var source = Files.loadAudio(path);
-                if (admin && source.limited) {
+                if (large && source.limited) {
                     source.id = null;
                     source.limited = false;
                     Files.saveAudio(path, source);
                 }
                 var best = Files.path(path, "audio.m4a");
-                file = admin || Files.exists(best) && Files.getFileSize(best) < Network.botFileLimit ? "audio.m4a" : "audio-limited.m4a";
+                file = large || Files.exists(best) && Files.getFileSize(best) < Network.botFileLimit ? "audio.m4a" : "audio-limited.m4a";
                 if (!Files.exists(Files.path(path, file))) {
                     this.updateStatus(`Downloading: ${url}`);
-                    tasks.push(Utility.queue("download", Network.maxDownloads, () => Utility.timeout(run(used => Network.downloadMusic(url, path, admin, used)), Network.downloadTimeout, "Downloading timed out")).then(() => this.updateStatus(`Fetching: ${url}`)));
+                    tasks.push(Utility.queue("download", Network.maxDownloads, () => Utility.timeout(run(used => Network.downloadMusic(url, path, large, used)), Network.downloadTimeout, "Downloading timed out")).then(() => this.updateStatus(`Fetching: ${url}`)));
                 }
                 if (!Files.exists(Files.path(path, "poster.jpg"))) tasks.push(run(used => Network.downloadPoster(url, path, used)));
 
                 await Promise.all(tasks);
                 Files.touch(Files.path(path, file));
             });
+            await fetchFiles();
+            var size = () => Files.getFileSize(Files.path(path, file));
+            if (!admin && large && size() >= Network.botFileLimit && !await this.allowLarge(Files.loadAudio(path).title, size())) {
+                large = false;
+                await fetchFiles();
+            }
             App.clean(true);
 
             audio.source = Files.loadAudio(path);
             audio.source.url = url;
             audio.source.file = file;
             audio.performer = audio.source.performer;
-            if (Files.getFileSize(Files.path(path, file)) >= Network.botFileLimit && !admin) {
+            if (!large && size() >= Network.botFileLimit) {
                 var sent = audio.source.id && await App.app.telegram.sendAudio(this.id, audio.source.id).then(() => true, () => false);
                 return sent ? this.decline() : this.decline(`This audio is over the ${Network.botFileLimit / 1024 / 1024} MB limit of this bot. Host your own bot to remove the limit: https://github.com/SuperStas0/SuperMetadata`);
             }
@@ -198,12 +206,28 @@ export class User {
     }
 
     /**
+     * @param {string} title
+     * @param {number} size
+     * @returns {Promise<boolean>}
+     */
+    async allowLarge(title, size) {
+        if (this.isAdmin()) return true;
+        var mode = Files.settings.largeFiles ?? "off";
+        if (mode == "on") return true;
+        if (mode != "confirm") return false;
+        this.updateStatus(`Waiting for the admin to allow a large file: ${title}`);
+        return await Panel.askLarge(this, title, size);
+    }
+
+    /**
      * @param {string} text
      */
     async askSearch(text) {
         var query = text.replace(/\s+/g, " ").trim().slice(0, 200);
         if (!query) return;
         this.removeAsk();
+        var mode = Files.settings.searchConfirm ?? "on";
+        if (mode == "off" || mode == "nonadmin" && this.isAdmin()) return this.search(query);
         this.askQuery = query;
         var msg = await App.app.telegram.sendMessage(this.id, `Search for \`${Utility.escapeCode(query)}\`?`, Menus.SearchAsk);
         this.askMenu = msg.message_id;
@@ -326,7 +350,8 @@ export class User {
         source.title = title;
         source.performer = performer;
         source.uploaded = true;
-        if (Files.getFileSize(Files.path(path, source.file)) >= Network.botFileLimit && !this.isAdmin()) throw User.expected(`This audio is over the ${Network.botFileLimit / 1024 / 1024} MB limit of this bot. Host your own bot to remove the limit: https://github.com/SuperStas0/SuperMetadata`);
+        var size = Files.getFileSize(Files.path(path, source.file));
+        if (size >= Network.botFileLimit && !await this.allowLarge(title, size)) throw User.expected(`This audio is over the ${Network.botFileLimit / 1024 / 1024} MB limit of this bot. Host your own bot to remove the limit: https://github.com/SuperStas0/SuperMetadata`);
         return source;
     }
 

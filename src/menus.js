@@ -6,17 +6,24 @@ export class Menus {
      * @returns {Markup.Markup}
      */
     static GenerateMarkup(...buttons){
+        return {...this.GeneratePlain(...buttons), parse_mode: "MarkdownV2"};
+    }
+
+    /**
+     * @param {[string, string, number][]} buttons
+     */
+    static GeneratePlain(...buttons){
         var rows = [];
         buttons.forEach(([name, command, row]) => {
             rows[row] ??= [];
             rows[row].push(Markup.button.callback(name, command));
         });
-        return {...Markup.inlineKeyboard(rows), parse_mode: "MarkdownV2"};
+        return {...Markup.inlineKeyboard(rows)};
     }
 
     static Simple = {parse_mode: "MarkdownV2", link_preview_options: {is_disabled: true}};
 
-    static Main = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2], ["Delete", "delete", 3]);
+    static Main = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2]);
 
     static Upload = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2]);
 

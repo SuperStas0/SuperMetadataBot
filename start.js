@@ -98,7 +98,7 @@ export class Start {
         console.log([
             "",
             "Step 3 of 3: log in your account",
-            "This account becomes the bot admin: no file size limit, no batch limit and the Delete button.",
+            "This account becomes the bot admin: no file size limit, no batch limit and the admin panel.",
             "Enter your phone number in international format, then the code Telegram sends to your Telegram app. If you use two-step verification, enter its password too."
         ].join("\n"));
         var client = new TelegramClient(new StringSession(""), apiId, apiHash, {connectionRetries: 5});
