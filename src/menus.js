@@ -25,7 +25,11 @@ export class Menus {
 
     static Main = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2]);
 
-    static Playlist = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2], ["Previous", "prev", 3], ["Next", "next", 3], ["Send All", "sendAll", 4]);
+    static Batch = this.GenerateMarkup(["Send", "send", 0], ["Send All", "sendAll", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2], ["Previous", "prev", 3], ["Next", "next", 3], ["Titles", "titles", 4], ["Order", "order", 4]);
+
+    static Titles = this.GenerateMarkup(["Skip", "skip", 0], ["Back", "cancel", 1]);
+
+    static Order = this.GenerateMarkup(["Previous", "prev", 0], ["Next", "next", 0], ["Move up", "moveUp", 1], ["Move down", "moveDown", 1], ["To first", "moveFirst", 2], ["To last", "moveLast", 2], ["Back", "cancel", 3]);
 
     /**
      * @param {number} suggestions

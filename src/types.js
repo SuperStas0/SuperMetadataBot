@@ -1,4 +1,4 @@
-/** @typedef {"none" | "loading" | "default" | "title" | "performer" | "poster" | "cuts"} UserStatus */
+/** @typedef {"none" | "loading" | "default" | "title" | "performer" | "poster" | "cuts" | "titles" | "order"} UserStatus */
 
 /** @typedef {"none" | "youtube" | "telegram" | "playlist"} UserMode */
 

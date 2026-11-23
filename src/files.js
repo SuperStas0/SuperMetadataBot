@@ -110,7 +110,9 @@ export class Files {
      * @param {AudioSource} data
      */
     static saveAudio(path, data) {
-        this.save(this.path(path, "data.json"), {id: data.id, posterId: data.posterId, title: data.title, performer: data.performer, duration: data.duration, limited: data.limited, silences: data.silences});
+        var file = this.path(path, "data.json");
+        var silences = data.silences ?? (this.exists(file) ? this.load(file).silences : null) ?? null;
+        this.save(file, {id: data.id, posterId: data.posterId, title: data.title, performer: data.performer, duration: data.duration, limited: data.limited, silences: silences});
     }
 
     /**
@@ -241,7 +243,7 @@ export class Files {
         for (var folder of folders) {
             for (var name of this.list(folder)) {
                 var path = this.path(folder, name);
-                if (!/^audio(-limited)?\.m4a/.test(name)) continue;
+                if (!/^audio(-limited)?\./.test(name)) continue;
                 var stats = fs.statSync(path);
                 if (now - stats.mtimeMs > maxAge) this.tryDelete(path);
                 else if (name.endsWith(".m4a")) audios.push({path: path, size: stats.size, time: stats.mtimeMs});

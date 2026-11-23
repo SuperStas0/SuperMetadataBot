@@ -23,7 +23,8 @@ Load audio into the bot by any of:
 
 Then you can:
 - Cut out parts of the audio, with suggestions from SponsorBlock and silence detection
-- Change title
+- Change title, in a batch one after another from the first audio to the last
+- Change the order of a batch
 - Change performer
 - Change poster
 - Format the poster: remove black edges, crop to 1:1 and resize to the Telegram poster size

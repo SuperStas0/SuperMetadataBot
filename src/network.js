@@ -178,15 +178,25 @@ export class Network {
     static async downloadMusic(url, path, allowLarge, cookies, onProgress, signal) {
         signal?.throwIfAborted();
         var settings = {
-            format: allowLarge ? { filter: "audioonly", type: "m4a", quality: "highest" } : "bestaudio[ext=m4a][filesize<50M]/bestaudio[filesize<50M]/worstaudio",
-            output: Files.path(path, allowLarge ? "audio.m4a" : "audio-limited.m4a"),
+            format: allowLarge ? "bestaudio/best" : "bestaudio[ext=m4a][filesize<50M]/bestaudio[filesize<50M]/bestaudio[filesize_approx<50M]/worstaudio/worst",
+            extractAudio: true,
+            audioFormat: "m4a",
+            output: Files.path(path, allowLarge ? "audio.%(ext)s" : "audio-limited.%(ext)s"),
             noPlaylist: true
         }
-        return await this.withCookies(cookies, copy => {
+        return await this.withCookies(cookies, async copy => {
+            var warnings = [];
             var download = this.ytdlp.download(url, {...settings, cookies: copy});
+            download.on("stderr", text => warnings.push(...text.split(/\r?\n/).filter(line => /^(WARNING|ERROR)/.test(line))));
             if (onProgress) download.on("progress", progress => onProgress(progress.percentage != null ? progress.percentage / 100 : progress.total ? progress.downloaded / progress.total : NaN));
             signal?.addEventListener("abort", () => download.kill(), {once: true});
-            return download.run();
+            try {
+                return await download.run();
+            }
+            catch (error) {
+                error.stack += `\n${warnings.slice(-8).join("\n")}`;
+                throw error;
+            }
         });
     }
 

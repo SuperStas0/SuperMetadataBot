@@ -63,6 +63,8 @@ export class User {
         this.controller = null;
         /** @type {(() => void) | null} */
         this.onCancel = null;
+        /** @type {number} position in the batch to return to after setting titles */
+        this.titleReturn = 0;
     }
 
     /**
@@ -87,7 +89,7 @@ export class User {
             onCancel?.();
             return this.notify("Cancelled");
         }
-        if (["title", "performer", "poster", "cuts"].includes(this.status)) return this.back();
+        if (["title", "performer", "poster", "cuts", "titles", "order"].includes(this.status)) return this.back();
         if (!dropped && !this.askQuery && !this.results && !this.confirm) return this.notify("Nothing to cancel");
         this.removeAsk();
         this.removeSearch();
@@ -96,7 +98,66 @@ export class User {
     }
 
     back() {
+        if (this.status == "titles") this.playlistId = this.titleReturn;
         return this.sendMenu(this.status == "cuts" || this.status == "poster" && this.getAudio().poster ? "new" : "default");
+    }
+
+    startTitles() {
+        if (this.mode != "playlist" || this.status != "default") return;
+        this.titleReturn = this.playlistId;
+        this.playlistId = 0;
+        this.sendMenu("titles");
+    }
+
+    nextTitle() {
+        if (this.status != "titles") return;
+        if (this.playlistId + 1 >= this.playlist.length) return this.back();
+        this.playlistId += 1;
+        this.sendMenu("titles");
+    }
+
+    startOrder() {
+        if (this.mode != "playlist" || this.status != "default") return;
+        this.sendMenu("order");
+    }
+
+    /**
+     * @param {number} to new position of the selected audio
+     */
+    moveCurrent(to) {
+        if (this.status != "order") return;
+        to = Math.max(0, Math.min(this.playlist.length - 1, to));
+        if (to == this.playlistId) return;
+        this.moveTo(this.playlistId, to);
+        this.sendMenu("order");
+    }
+
+    /**
+     * @param {number} from
+     * @param {number} to
+     */
+    moveTo(from, to) {
+        var [audio] = this.playlist.splice(from, 1);
+        this.playlist.splice(to, 0, audio);
+        this.playlistId = to;
+    }
+
+    /**
+     * @param {string} text moves as "from to", one per line, positions start from 1
+     * @returns {string | null} error text
+     */
+    applyMoves(text) {
+        var count = this.playlist.length;
+        var moves = text.split(/\r?\n/).map(line => line.trim()).filter(line => line).map(line => line.match(/^(\d+)(?:\s*(?:>|-|to)\s*|\s+)(\d+)$/)?.slice(1).map(Number));
+        if (!moves.length || moves.some(move => !move || move.some(position => position < 1 || position > count))) return `Send the position of an audio and its new position, for example 5 2, from 1 to ${count}`;
+        moves.forEach(([from, to]) => this.moveTo(from - 1, to - 1));
+        this.sendMenu("order");
+        return null;
+    }
+
+    scanSilences() {
+        var current = this.getAudio();
+        [current, ...this.getAudios().filter(audio => audio != current)].forEach(audio => audio.source.path && this.loadSilences(audio.source));
     }
 
     restoreMenu() {
@@ -651,9 +712,12 @@ export class User {
             this.status = "default";
             var msg = await App.app.telegram.sendMessage(this.id, menuText, this.getMainMenu());
             this.menu = msg.message_id;
+            this.scanSilences();
         }
         else if (mode == "default") await this.editMenu(menuText, this.getMainMenu());
         else if (mode == "title") this.editMenu(menuText, Menus.Cancel);
+        else if (mode == "titles") this.editMenu(menuText, Menus.Titles);
+        else if (mode == "order") this.editMenu(menuText, Menus.Order);
         else if (mode == "performer") this.editMenu(menuText, audio.performer ? (audio.performer == audio.source.performer ? Menus.RemoveOnly : Menus.DefaultNRemove) : Menus.DefaultOnly);
         else if (mode == "poster") {
             if (audio.poster) {
@@ -730,6 +794,7 @@ export class User {
             return true;
         }
         catch (error) {
+            source.silences ??= [];
             Log.error(`Silence ${source.path} (user ${this.id})`, error);
             return false;
         }
@@ -773,7 +838,7 @@ export class User {
     }
 
     getMainMenu() {
-        return this.mode == "playlist" ? Menus.Playlist : Menus.Main;
+        return this.mode == "playlist" ? Menus.Batch : Menus.Main;
     }
 
     /**
@@ -1087,6 +1152,20 @@ export class User {
         var info = this.getInfo();
         if (mode == "new" || mode == "default") return info.text;
         if (mode == "title") return `Current title: \`${info.title}\`\nSend new title`;
+        if (mode == "titles") return `\`${this.playlistId + 1}/${this.playlist.length}\`\nCurrent title: \`${info.title}\`\nSend new title, or skip it`;
+        if (mode == "order") {
+            var count = this.playlist.length;
+            var from = Math.max(0, Math.min(this.playlistId - 7, count - 15));
+            var lines = ["Select an audio and move it, or send a move like `5 2` to put audio 5 on position 2, one move per line"];
+            if (from > 0) lines.push("...");
+            for (var index = from; index < Math.min(count, from + 15); index++) {
+                var audio = this.playlist[index];
+                var title = Utility.escapeCode((audio.title ?? audio.source.title ?? "").replace(/\s+/g, " ").slice(0, 40) || "untitled");
+                lines.push(`${index == this.playlistId ? `*${index + 1}.*` : `${index + 1}.`} \`${title}\``);
+            }
+            if (from + 15 < count) lines.push("...");
+            return lines.join("\n");
+        }
         if (mode == "performer") return info.performer ? `Current performer: \`${info.performer}\`\nSend new performer` : `Currently no performer\nSend new performer`;
         if (mode == "poster") return info.poster ? `Current poster\nSend new poster` : `Currently no poster\nSend new poster`;
         if (mode == "cuts") {

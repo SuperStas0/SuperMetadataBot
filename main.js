@@ -149,14 +149,28 @@ export class App {
         this.action("next", user => {
             if (user.mode != "playlist" || user.playlistId + 1 == user.playlist.length) return;
             user.playlistId += 1;
-            user.sendMenu();
+            user.sendMenu(user.status == "order" ? "order" : "new");
         })
 
         this.action("prev", user => {
             if (user.mode != "playlist" || user.playlistId == 0) return;
             user.playlistId -= 1;
-            user.sendMenu();
+            user.sendMenu(user.status == "order" ? "order" : "new");
         })
+
+        this.action("titles", user => user.startTitles());
+
+        this.action("skip", user => user.nextTitle());
+
+        this.action("order", user => user.startOrder());
+
+        this.action("moveUp", user => user.moveCurrent(user.playlistId - 1));
+
+        this.action("moveDown", user => user.moveCurrent(user.playlistId + 1));
+
+        this.action("moveFirst", user => user.moveCurrent(0));
+
+        this.action("moveLast", user => user.moveCurrent(user.playlist.length - 1));
 
         this.action("title", user => user.sendMenu("title"));
 
@@ -296,6 +310,17 @@ export class App {
                 if (ctx.message.text.length > User.textLimit) return user.updateStatus("Title is too long");
                 user.getAudio().title = ctx.message.text;
                 user.sendMenu("default");
+                ctx.deleteMessage(ctx.message.message_id).catch(() => {});
+            }
+            else if (user.status == "titles") {
+                if (ctx.message.text.length > User.textLimit) return user.updateStatus("Title is too long");
+                user.getAudio().title = ctx.message.text;
+                ctx.deleteMessage(ctx.message.message_id).catch(() => {});
+                user.nextTitle();
+            }
+            else if (user.status == "order") {
+                var error = user.applyMoves(ctx.message.text);
+                if (error) return user.updateStatus(error);
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
             }
             else if (user.status == "cuts") {

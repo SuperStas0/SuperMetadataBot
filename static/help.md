@@ -13,7 +13,7 @@ The bot shows the progress of downloads, conversions and uploads where possible.
 *Title* - send the new title, up to 256 characters
 *Performer* - send the new performer, up to 256 characters. _Set default_ restores the YouTube channel name, _Remove_ clears it
 *Cuts* - cut out parts of the audio, in the middle too. The Cuts menu is a reply to the loaded audio, tap a timecode in it to jump there. Send a range as `start - end`, for example `1:30 - 2:45`, one range per line, timecodes as `seconds`, `MM:SS` or `HH:MM:SS`. Leave a side empty for the edge of the audio, `1:30 -` cuts to the end and `- 2:45` from the start, `start` and `end` work too. A time after the end snaps to the end. Up to 10 cuts, overlapping ones are merged. _Remove 1_, _Remove 2_ and so on delete a single cut, _Clear all_ deletes all of them
-*Suggestions* - the Cuts menu lists sponsor, self promotion, intro, outro and similar segments from SponsorBlock, and silent parts of the audio (below -60 dB for 2 seconds or more), up to 8 in total. _Apply 1_, _Apply 2_ and so on add one, _Apply all_ adds all of them. The video id is sent to sponsor.ajay.app when a YouTube audio is loaded
+*Suggestions* - the Cuts menu lists sponsor, self promotion, intro, outro and similar segments from SponsorBlock, and silent parts of the audio (below -60 dB for 2 seconds or more, found in the background after the audio is loaded), up to 8 in total. _Apply 1_, _Apply 2_ and so on add one, _Apply all_ adds all of them. The video id is sent to sponsor.ajay.app when a YouTube audio is loaded
 *Poster* - send a photo to use as the poster. _Set youtube_ restores the YouTube thumbnail (_Set original_ for audio files), _Remove_ clears it, _Format_ removes black edges, crops it to 1:1 and resizes it to the Telegram poster size, _Unformat_ undoes that. The YouTube thumbnail is formatted by default
 *Send* - send the edited audio
 *Back* - go back to the main menu. In the search results and the playlist confirmation *Cancel* closes the message
@@ -21,7 +21,9 @@ The messages you send to change a value are deleted after they are applied.
 
 *Batch*
 *Previous* and *Next* switch between the loaded audios. *Title* and *Cuts* are set separately for each audio, *Performer* and *Poster* are shared and apply to the whole batch.
-*Send All* sends every audio of the batch.
+*Send All* sends every audio of the batch in its current order.
+*Titles* shows the title of every audio one after another, from the first to the last: send the new title and the next audio comes up at once, _Skip_ keeps the title, _Back_ stops.
+*Order* - _Previous_ and _Next_ select an audio, _Move up_, _Move down_, _To first_ and _To last_ move it. Or send two numbers like `5 2` to put audio 5 on position 2, one move per line.
 
 *Commands*
 /start - basic information
