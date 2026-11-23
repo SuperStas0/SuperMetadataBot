@@ -29,7 +29,7 @@ Then you can:
 - Make the poster square
 - Change duration
 
-Errors are written to `logs\error.log`. The admin can view the last one with `/error`.
+Errors are written to `logs\error.log`. The admin can view the last one in the admin panel (`/admin`).
 
 # Cookies
 Some videos need a YouTube login: age restricted ones, and any video when YouTube blocks the server as a bot. Cookies are used only for such videos and only the cookies of the user who sent the request.

@@ -25,8 +25,6 @@ export class Menus {
 
     static Main = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2]);
 
-    static Upload = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2]);
-
     static Playlist = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2], ["Previous", "prev", 3], ["Next", "next", 3], ["Send All", "sendAll", 4]);
 
     /**
@@ -60,10 +58,6 @@ export class Menus {
     }
 
     static Cancel = this.GenerateMarkup(["Back", "cancel", 0]);
-
-    static CancelWithNull = this.GenerateMarkup(["Null", "null", 0], ["Back", "cancel", 1]);
-
-    static Choice = this.GenerateMarkup(["1", "select", 0]);
 
     static DefaultOnly = this.GenerateMarkup(["Set default", "default", 0], ["Back", "cancel", 1]);
 

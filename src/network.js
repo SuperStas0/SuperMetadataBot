@@ -171,10 +171,11 @@ export class Network {
      * @param {string} url
      * @param {string} path
      * @param {string | null} [cookies]
+     * @param {{url: string}[]} [thumbnails] from the already fetched info
      */
-    static async downloadPoster(url, path, cookies) {
-        for (var posterUrl of (await this.fetchInfo(url, cookies)).thumbnails.reverse().map(el => el.url)) {
-            if (!posterUrl.includes(".jpg") || posterUrl.includes(".webp")) continue;
+    static async downloadPoster(url, path, cookies, thumbnails) {
+        for (var posterUrl of (thumbnails ?? (await this.fetchInfo(url, cookies)).thumbnails ?? []).toReversed().map(el => el.url)) {
+            if (!posterUrl?.includes(".jpg") || posterUrl.includes(".webp")) continue;
             if (await this.downloadImage(posterUrl, Files.path(path, "poster.jpg"), this.posterFileLimit)) return Promise.resolve();
         }
     }

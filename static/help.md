@@ -28,7 +28,6 @@ The messages you send to change a value are deleted after they are applied.
 /help - this text
 /cookies - how to send cookies and their current status
 /removecookies - delete your saved cookies
-/error - admin only, the last logged error
 /admin - admin only, admin panel
 
 *Cookies*

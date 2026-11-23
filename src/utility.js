@@ -108,8 +108,29 @@ export class Utility {
      * @returns {string[]}
      */
     static getUrls(ctx) {
-        if (!ctx.message.entities) return [];
-        return ctx.message.entities.filter(entity => entity.type == "url").map(entity => ctx.message.text.slice(entity.offset, entity.offset + entity.length)).filter(url => this.getIdFromUrl(url));
+        return this.getEntityUrls(ctx).filter(url => this.getIdFromUrl(url));
+    }
+
+    /**
+     * @param {Context} ctx
+     * @returns {string[]}
+     */
+    static getEntityUrls(ctx) {
+        return (ctx.message.entities ?? []).filter(entity => entity.type == "url").map(entity => ctx.message.text.slice(entity.offset, entity.offset + entity.length));
+    }
+
+    /**
+     * @param {string} url
+     * @returns {{host: string, path: string, params: URLSearchParams} | null}
+     */
+    static parseUrl(url) {
+        try {
+            var parsed = new URL(url.includes("://") ? url : `https://${url}`);
+        }
+        catch {
+            return null;
+        }
+        return {host: parsed.hostname.replace(/^(www|m|music)\./, ""), path: parsed.pathname, params: parsed.searchParams};
     }
 
     /**
@@ -117,8 +138,7 @@ export class Utility {
      * @returns {string[]}
      */
     static getPlaylistUrls(ctx) {
-        if (!ctx.message.entities) return [];
-        var ids = ctx.message.entities.filter(entity => entity.type == "url").map(entity => this.getListFromUrl(ctx.message.text.slice(entity.offset, entity.offset + entity.length))).filter(id => id);
+        var ids = this.getEntityUrls(ctx).map(url => this.getListFromUrl(url)).filter(id => id);
         return [...new Set(ids)].map(id => `https://www.youtube.com/playlist?list=${id}`);
     }
 
@@ -127,14 +147,8 @@ export class Utility {
      * @returns {string | null}
      */
     static getListFromUrl(url) {
-        try {
-            var parsed = new URL(url.includes("://") ? url : `https://${url}`);
-        }
-        catch {
-            return null;
-        }
-        var host = parsed.hostname.replace(/^(www|m|music)\./, "");
-        var id = host == "youtube.com" && parsed.pathname == "/playlist" ? parsed.searchParams.get("list") : null;
+        var parsed = this.parseUrl(url);
+        var id = parsed?.host == "youtube.com" && parsed.path == "/playlist" ? parsed.params.get("list") : null;
         return id && /^[A-Za-z0-9_-]{10,64}$/.test(id) ? id : null;
     }
 
@@ -143,16 +157,11 @@ export class Utility {
      * @returns {string | null}
      */
     static getIdFromUrl(url) {
-        try {
-            var parsed = new URL(url.includes("://") ? url : `https://${url}`);
-        }
-        catch {
-            return null;
-        }
-        var host = parsed.hostname.replace(/^(www|m|music)\./, "");
+        var parsed = this.parseUrl(url);
+        if (!parsed) return null;
         var id = null;
-        if (host == "youtu.be") id = parsed.pathname.split("/")[1];
-        else if (host == "youtube.com") id = parsed.pathname == "/watch" ? parsed.searchParams.get("v") : parsed.pathname.match(/^\/(?:shorts|live|embed)\/([^/]+)/)?.[1];
+        if (parsed.host == "youtu.be") id = parsed.path.split("/")[1];
+        else if (parsed.host == "youtube.com") id = parsed.path == "/watch" ? parsed.params.get("v") : parsed.path.match(/^\/(?:shorts|live|embed)\/([^/]+)/)?.[1];
         return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
     }
 
@@ -226,13 +235,14 @@ export class Utility {
     static async queue(name, max, task) {
         var queue = this.queues[name] ??= {running: 0, waiting: []};
         if (queue.running >= max) await new Promise(resolve => queue.waiting.push(resolve));
-        queue.running++;
+        else queue.running++;
         try {
             return await task();
         }
         finally {
-            queue.running--;
-            queue.waiting.shift()?.();
+            var next = queue.waiting.shift();
+            if (next) next();
+            else queue.running--;
         }
     }
 

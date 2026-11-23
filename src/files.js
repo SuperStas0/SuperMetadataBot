@@ -215,7 +215,7 @@ export class Files {
         for (var folder of folders) {
             for (var name of this.list(folder)) {
                 var path = this.path(folder, name);
-                if (!name.startsWith("audio.m4a")) continue;
+                if (!/^audio(-limited)?\.m4a/.test(name)) continue;
                 var stats = fs.statSync(path);
                 if (now - stats.mtimeMs > maxAge) this.tryDelete(path);
                 else if (name.endsWith(".m4a")) audios.push({path: path, size: stats.size, time: stats.mtimeMs});

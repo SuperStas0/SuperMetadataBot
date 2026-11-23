@@ -5,7 +5,7 @@ export class Log {
 
     static maxSize = 1024 * 1024;
 
-    static maxText = 3500;
+    static maxText = 3000;
 
     /** @type {string[]} */
     static secrets = [];

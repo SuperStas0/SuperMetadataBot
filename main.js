@@ -7,7 +7,7 @@ import { Menus } from "./src/menus.js";
 import { Log } from "./src/log.js";
 import { History } from "./src/history.js";
 import { Panel } from "./src/panel.js";
-import { Telegraf, Markup} from "telegraf";
+import { Telegraf } from "telegraf";
 import filters from "telegraf/filters";
 
 export class App {
@@ -26,6 +26,17 @@ export class App {
 
     /** @type {Set<number>} */
     static clearing = new Set();
+
+    /**
+     * @param {string | RegExp} trigger
+     * @param {(user: User, ctx: Context) => any} handler
+     */
+    static action(trigger, handler) {
+        this.app.action(trigger, async ctx => {
+            ctx.answerCbQuery().catch(() => {});
+            handler(User.getUser(ctx), ctx);
+        })
+    }
 
     /**
      * @param {number} id
@@ -78,8 +89,10 @@ export class App {
                 else if (ctx.chat?.type == "private") ctx.reply("This bot is private").catch(() => {});
                 return;
             }
-            if (ctx.chat?.type == "private") this.clearKeyboard(ctx.chat.id);
-            if (ctx.chat?.type == "private" && ctx.callbackQuery?.data != "searchYes") this.data[ctx.chat.id]?.removeAsk();
+            if (ctx.chat?.type == "private") {
+                this.clearKeyboard(ctx.chat.id);
+                if (ctx.callbackQuery?.data != "searchYes") this.data[ctx.chat.id]?.removeAsk();
+            }
             try {
                 await next();
             }
@@ -94,151 +107,76 @@ export class App {
             ctx.reply(Files.startText, Menus.Simple);
         })
 
-        this.app.action("send", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            var user = User.getUser(ctx);
-            user.send();
-        })
+        this.action("send", user => user.send());
 
-        this.app.action("sendAll", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            var user = User.getUser(ctx);
-            user.sendPlaylist();
-        })
+        this.action("sendAll", user => user.sendPlaylist());
 
-        this.app.action("null", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            var user = User.getUser(ctx);
+        this.action("null", user => {
             if (user.status == "poster") {
                 user.applyPoster(null);
                 user.sendMenu("poster");
-                return;
             }
-            if (user.status == "performer") {
+            else if (user.status == "performer") {
                 user.setPerformer(null);
                 user.sendMenu("default");
-                return;
             }
         })
 
-        this.app.action("default", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            var user = User.getUser(ctx);
+        this.action("default", user => {
             if (user.status == "poster") {
                 if (!user.hasDefaultPoster()) return user.updateStatus("This audio has no default poster");
                 user.applyPoster("default");
                 user.sendMenu("poster");
-                return;
             }
-            if (user.status == "performer") {
+            else if (user.status == "performer") {
                 user.resetPerformer();
                 user.sendMenu("default");
-                return;
             }
         })
 
-        this.app.action("cancel", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            var user = User.getUser(ctx);
-            if (user.status == "poster" && user.getAudio().poster) user.sendMenu("new");
-            else user.sendMenu("default");
-        })
+        this.action("cancel", user => user.sendMenu(user.status == "poster" && user.getAudio().poster ? "new" : "default"));
 
-        this.app.action("next", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            var user = User.getUser(ctx);
-            if (user.mode != "playlist") return;
-            if (user.playlistId + 1 == user.playlist.length) return;
+        this.action("next", user => {
+            if (user.mode != "playlist" || user.playlistId + 1 == user.playlist.length) return;
             user.playlistId += 1;
             user.sendMenu();
         })
 
-        this.app.action("prev", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            var user = User.getUser(ctx);
-            if (user.mode != "playlist") return;
-            if (user.playlistId == 0) return;
+        this.action("prev", user => {
+            if (user.mode != "playlist" || user.playlistId == 0) return;
             user.playlistId -= 1;
             user.sendMenu();
         })
 
-        this.app.action("title", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            var user = User.getUser(ctx);
-            user.sendMenu("title");
+        this.action("title", user => user.sendMenu("title"));
+
+        this.action("performer", user => user.sendMenu("performer"));
+
+        this.action("poster", user => user.sendMenu("poster"));
+
+        this.action("square", user => user.toggleSquare());
+
+        this.action("playlistLoad", user => user.loadPending());
+
+        this.action("playlistCancel", user => user.removeConfirm());
+
+        this.action("cuts", user => {
+            if (user.status == "default") user.sendMenu("cuts");
         })
 
-        this.app.action("performer", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            var user = User.getUser(ctx);
-            user.sendMenu("performer");
-        })
+        this.action(/^cutAdd:(\d+)$/, (user, ctx) => user.addSuggested(Number(ctx.match[1])));
 
-        this.app.action("poster", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            var user = User.getUser(ctx);
-            user.sendMenu("poster");
-        })
+        this.action("cutsAddAll", user => user.addSuggested(null));
 
-        this.app.action("square", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            var user = User.getUser(ctx);
-            user.toggleSquare();
-        })
+        this.action(/^cutRemove:(\d+)$/, (user, ctx) => user.removeCut(Number(ctx.match[1])));
 
-        this.app.action("playlistLoad", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            var user = User.getUser(ctx);
-            user.loadPending();
-        })
+        this.action("cutsClear", user => user.applyCuts([]));
 
-        this.app.action("playlistCancel", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            var user = User.getUser(ctx);
-            user.removeConfirm();
-        })
+        this.action(/^search:(\d+)$/, (user, ctx) => user.pickResult(Number(ctx.match[1])));
 
-        this.app.action("cuts", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            var user = User.getUser(ctx);
-            if (user.status != "default") return;
-            user.sendMenu("cuts");
-        })
+        this.action("searchYes", user => user.confirmSearch());
 
-        this.app.action(/^cutAdd:(\d+)$/, async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            User.getUser(ctx).addSuggested(Number(ctx.match[1]));
-        })
-
-        this.app.action("cutsAddAll", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            User.getUser(ctx).addSuggested(null);
-        })
-
-        this.app.action(/^cutRemove:(\d+)$/, async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            User.getUser(ctx).removeCut(Number(ctx.match[1]));
-        })
-
-        this.app.action("cutsClear", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            User.getUser(ctx).applyCuts([]);
-        })
-
-        this.app.action(/^search:(\d+)$/, async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            User.getUser(ctx).pickResult(Number(ctx.match[1]));
-        })
-
-        this.app.action("searchYes", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            User.getUser(ctx).confirmSearch();
-        })
-
-        this.app.action("searchCancel", async ctx => {
-            ctx.answerCbQuery().catch(() => {});
-            User.getUser(ctx).removeSearch();
-        })
+        this.action("searchCancel", user => user.removeSearch());
 
         this.app.command("search", async ctx => {
             if (ctx.chat.type != "private") return;
@@ -246,13 +184,6 @@ export class App {
             var query = ctx.message.text.replace(/^\/search(@\w+)?/i, "").replace(/\s+/g, " ").trim().slice(0, 200);
             if (!query) return user.notify("Send /search and what to look for, for example /search Never gonna give you up");
             user.search(query);
-        })
-
-        this.app.command("error", async ctx => {
-            if (ctx.chat.type != "private") return;
-            var user = User.getUser(ctx);
-            if (!user.isAdmin()) return user.notify("Only admin can view errors");
-            user.notify(Log.last() ?? "No errors logged");
         })
 
         this.app.hears(/^\/log_(\d+)$/, async ctx => {

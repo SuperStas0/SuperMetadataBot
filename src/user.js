@@ -125,7 +125,7 @@ export class User {
                     this.updateStatus(`Downloading: ${url}`);
                     tasks.push(Utility.queue("download", Network.maxDownloads, () => Utility.timeout(run(used => Network.downloadMusic(url, path, large, used)), Network.downloadTimeout, "Downloading timed out")).then(() => this.updateStatus(`Fetching: ${url}`)));
                 }
-                if (!Files.exists(Files.path(path, "poster.jpg"))) tasks.push(run(used => Network.downloadPoster(url, path, used)));
+                if (!Files.exists(Files.path(path, "poster.jpg"))) tasks.push(run(used => Network.downloadPoster(url, path, used, metadata?.thumbnails)));
 
                 await Promise.all(tasks);
                 Files.touch(Files.path(path, file));
@@ -142,6 +142,7 @@ export class User {
             audio.source.url = url;
             audio.source.file = file;
             audio.performer = audio.source.performer;
+            if (audio.poster == "default" && !Files.exists(path, "poster.jpg")) this.setPoster(null, audio);
             if (!large && size() >= Network.botFileLimit) {
                 var sent = audio.source.id && await App.app.telegram.sendAudio(this.id, audio.source.id).then(() => true, () => false);
                 return sent ? this.decline() : this.decline(`This audio is over the ${Network.botFileLimit / 1024 / 1024} MB limit of this bot. Host your own bot to remove the limit: https://github.com/SuperStas0/SuperMetadata`);
@@ -462,8 +463,7 @@ export class User {
 
         this.status = "loading";
         this.updateStatus(`Uploading: ${title}`);
-        if (this.menu) App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
-        this.menu = null;
+        this.removeMenu();
 
         try {
             if (audio.cuts.length) await Files.cut(Files.path(source.path, source.file), audioPath, Utility.getKept(audio.cuts, source.duration));
@@ -498,7 +498,7 @@ export class User {
             }
         }
         this.updateStatus(`Uploading: ${source.title}`);
-        var msg = await Network.uploadFile(this.id, Files.path(source.path, source.file), {title: source.title, performer: source.performer, duration: source.duration, thumbnail: {source: Files.path(source.path, "poster.jpg")}});
+        var msg = await Network.uploadFile(this.id, Files.path(source.path, source.file), {title: source.title, performer: source.performer, duration: source.duration, thumbnail: Files.exists(source.path, "poster.jpg") ? {source: Files.path(source.path, "poster.jpg")} : undefined});
         source.id = msg.audio.file_id;
         source.limited = source.file != "audio.m4a";
         Files.saveAudio(source.path, source);
@@ -546,26 +546,17 @@ export class User {
         this.status = mode;
 
         if (mode == "new") {
-            if (this.menu) App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
+            this.removeMenu();
             this.status = "default";
             var msg = await App.app.telegram.sendMessage(this.id, menuText, this.getMainMenu());
             this.menu = msg.message_id;
         }
-        else if (mode == "default") {
-            try {
-                await App.app.telegram.editMessageText(this.id, this.menu, null, menuText, this.getMainMenu());
-            }
-            catch (error) {
-                if (!error.response?.description?.includes("message is not modified")) {
-                    Log.error(`Menu ${mode} (user ${this.id})`, error);
-                }
-            }
-        }
+        else if (mode == "default") await this.editMenu(menuText, this.getMainMenu());
         else if (mode == "title") this.editMenu(menuText, Menus.Cancel);
         else if (mode == "performer") this.editMenu(menuText, audio.performer ? (audio.performer == audio.source.performer ? Menus.RemoveOnly : Menus.DefaultNRemove) : Menus.DefaultOnly);
         else if (mode == "poster") {
             if (audio.poster) {
-                App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
+                this.removeMenu();
                 var poster = audio.posterId;
                 if (audio.poster == "default") poster = audio.source.posterId ?? {source: Files.path(audio.source.path, "poster.jpg")};
                 if (audio.posterSquare) poster = {source: await this.getPosterFile()};
@@ -583,7 +574,7 @@ export class User {
                 }
                 catch (error) {
                     if (!error.response?.description?.includes("no text in the message to edit")) Log.error(`Menu ${mode} (user ${this.id})`, error);
-                    App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
+                    this.removeMenu();
                     var msg = await App.app.telegram.sendMessage(this.id, menuText, Menus.DefaultOnly);
                     this.menu = msg.message_id;
                 }
@@ -646,7 +637,7 @@ export class User {
     }
 
     getMainMenu() {
-        return this.mode == "playlist" ? Menus.Playlist : this.mode == "telegram" ? Menus.Upload : Menus.Main;
+        return this.mode == "playlist" ? Menus.Playlist : Menus.Main;
     }
 
     /**
@@ -717,6 +708,7 @@ export class User {
     removeMenu() {
         if (!this.menu) return;
         App.app.telegram.deleteMessage(this.id, this.menu).catch(() => {});
+        this.menu = null;
     }
 
     isAdmin() {

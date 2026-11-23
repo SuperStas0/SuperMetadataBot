@@ -27,7 +27,7 @@ export class Panel {
     static requests = {};
 
     static main() {
-        return {text: "Admin panel", markup: Menus.GenerateMarkup(["Log", "panel:log:0", 0], ["Storage", "panel:storage", 0], ["Settings", "panel:settings", 1], ["Delete audio", "panel:delete", 1], ["Close", "panel:close", 2])};
+        return {text: "Admin panel", markup: Menus.GenerateMarkup(["Log", "panel:log:0", 0], ["Storage", "panel:storage", 0], ["Errors", "panel:error", 1], ["Settings", "panel:settings", 1], ["Delete audio", "panel:delete", 2], ["Close", "panel:close", 3])};
     }
 
     /**
@@ -45,6 +45,14 @@ export class Panel {
 
     static storage() {
         return {text: Utility.getStorageText(Files.getStorage(), Files.getFreeSpace(), App.cacheSize), markup: Menus.GenerateMarkup(["Refresh", "panel:storage", 0], ["Back", "panel:main", 1])};
+    }
+
+    static error() {
+        var text = Log.last();
+        if (!text) return {text: "No errors logged", markup: Menus.GenerateMarkup(["Back", "panel:main", 0])};
+        var escaped = Utility.escapeCode(text);
+        while (escaped.length > 3800) escaped = Utility.escapeCode(text = text.slice(0, -200));
+        return {text: `\`\`\`\n${escaped}\n\`\`\``, markup: Menus.GenerateMarkup(["Refresh", "panel:error", 0], ["Back", "panel:main", 1])};
     }
 
     static settings() {
@@ -132,7 +140,7 @@ export class Panel {
             name = "settings";
         }
         ctx.answerCbQuery().catch(() => {});
-        var view = name == "log" ? this.log(page) : name == "storage" ? this.storage() : name == "settings" ? this.settings() : this.main();
+        var view = name == "log" ? this.log(page) : name == "storage" ? this.storage() : name == "error" ? this.error() : name == "settings" ? this.settings() : this.main();
         await this.show(ctx, view);
     }
 
@@ -146,7 +154,6 @@ export class Panel {
         ctx.deleteMessage().catch(() => {});
         this.message = null;
         user.removeMenu();
-        user.menu = null;
         user.status = "none";
         Files.delete(user.getSourcePath());
         user.parseLink().then(() => user.sendMenu("new"));
