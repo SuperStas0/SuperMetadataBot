@@ -96,7 +96,7 @@ export class User {
     }
 
     back() {
-        return this.sendMenu(this.status == "poster" && this.getAudio().poster ? "new" : "default");
+        return this.sendMenu(this.status == "cuts" || this.status == "poster" && this.getAudio().poster ? "new" : "default");
     }
 
     restoreMenu() {
@@ -430,6 +430,7 @@ export class User {
         var audio = new Audio();
         audio.source = source;
         audio.performer = source.performer;
+        audio.sourceMessage = file.messageId ?? null;
         this.setPoster(Files.exists(source.path, "poster.jpg") ? "default" : null, audio);
         History.record(this, audio, file);
         return audio;
@@ -573,11 +574,12 @@ export class User {
      * @param {AbortSignal} signal
      */
     async sendSource(signal) {
-        var source = this.getAudio().source;
+        var audio = this.getAudio();
+        var source = audio.source;
 
         if (source.id) {
             try {
-                await App.app.telegram.sendAudio(this.id, source.id);
+                audio.sourceMessage = (await App.app.telegram.sendAudio(this.id, source.id)).message_id;
                 return;
             }
             catch (error) {
@@ -585,7 +587,10 @@ export class User {
             }
         }
         this.updateStatus(`Uploading: ${source.title}`);
-        var msg = await Network.uploadFile(this.id, Files.path(source.path, source.file), {title: source.title, performer: source.performer, duration: source.duration, thumbnail: Files.exists(source.path, "poster.jpg") ? {source: Files.path(source.path, "poster.jpg")} : undefined}, this.progress(`Uploading: ${source.title}`, signal), signal);
+        var poster = Files.path(source.path, "poster.jpg");
+        var thumbnail = Files.exists(poster) ? {source: await this.getSquare(poster).catch(() => poster)} : undefined;
+        var msg = await Network.uploadFile(this.id, Files.path(source.path, source.file), {title: source.title, performer: source.performer, duration: source.duration, thumbnail: thumbnail}, this.progress(`Uploading: ${source.title}`, signal), signal);
+        audio.sourceMessage = msg.message_id;
         source.id = msg.audio.file_id;
         source.limited = source.file != "audio.m4a";
         Files.saveAudio(source.path, source);
@@ -637,6 +642,7 @@ export class User {
             if (this.status == "loading" || this.status == "none") return;
         }
         var menuText = this.getMenuText(mode).replaceAll(".", "\\.").replaceAll("-", "\\-");
+        var previous = this.status;
         this.status = mode;
 
         if (mode == "new") {
@@ -674,7 +680,15 @@ export class User {
                 }
             }
         }
-        else if (mode == "cuts") this.editMenu(menuText, Menus.GenerateCuts(this.getSuggestions().length, audio.cuts.length));
+        else if (mode == "cuts") {
+            var cuts = Menus.GenerateCuts(this.getSuggestions().length, audio.cuts.length);
+            if (previous == "cuts") this.editMenu(menuText, cuts);
+            else {
+                this.removeMenu();
+                var msg = await App.app.telegram.sendMessage(this.id, menuText, {...cuts, ...(audio.sourceMessage && {reply_parameters: {message_id: audio.sourceMessage, allow_sending_without_reply: true}})});
+                this.menu = msg.message_id;
+            }
+        }
     }
 
     /**
@@ -966,10 +980,17 @@ export class User {
     async getPosterFile() {
         var audio = this.getAudio();
         var path = audio.poster == "default" ? Files.path(audio.source.path, "poster.jpg") : this.getPosterPath();
-        if (!audio.posterSquare) return path;
-        var squarePath = path.replace(/\.jpg$/, "-square.jpg");
-        if (!Files.exists(squarePath)) await Files.square(path, squarePath);
-        return squarePath;
+        return audio.posterSquare ? await this.getSquare(path) : path;
+    }
+
+    /**
+     * @param {string} poster
+     * @returns {Promise<string>} the square version, made when missing
+     */
+    async getSquare(poster) {
+        var square = poster.replace(/\.jpg$/, "-square.jpg");
+        if (!Files.exists(square)) await Files.square(poster, square);
+        return square;
     }
 
     async toggleSquare() {
@@ -1041,7 +1062,7 @@ export class User {
         if (mode == "performer") return info.performer ? `Current performer: \`${info.performer}\`\nSend new performer` : `Currently no performer\nSend new performer`;
         if (mode == "poster") return info.poster ? `Current poster\nSend new poster` : `Currently no poster\nSend new poster`;
         if (mode == "cuts") {
-            var format = ([start, end]) => `\`${Utility.getDurationString(start)}\` - \`${Utility.getDurationString(end)}\``;
+            var format = ([start, end]) => `${Utility.getDurationString(start)} - ${Utility.getDurationString(end)}`;
             var suggestions = this.getSuggestions();
             var lines = [info.cuts.length ? "Cuts:" : "No cuts"];
             info.cuts.forEach((cut, index) => lines.push(`${index + 1}. ${format(cut)}`));

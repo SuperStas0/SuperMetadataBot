@@ -26,6 +26,9 @@ export class Audio {
 
         /** @type {number | null} */
         this.logId = null;
+
+        /** @type {number | null} message of the loaded audio in the chat */
+        this.sourceMessage = null;
     }
 }
 

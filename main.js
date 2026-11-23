@@ -328,7 +328,7 @@ export class App {
                 user.setCookies(document);
             }
             else if (Utility.isAudioDocument(document)) {
-                user.loadFile({id: document.file_id, uniqueId: document.file_unique_id, size: document.file_size, name: document.file_name, document: true});
+                user.loadFile({id: document.file_id, uniqueId: document.file_unique_id, size: document.file_size, name: document.file_name, document: true, messageId: ctx.message.message_id});
             }
         })
 
@@ -344,7 +344,7 @@ export class App {
             }
             else {
                 var audio = ctx.message.audio;
-                user.loadFile({id: audio.file_id, uniqueId: audio.file_unique_id, size: audio.file_size, name: audio.file_name, title: audio.title, performer: audio.performer});
+                user.loadFile({id: audio.file_id, uniqueId: audio.file_unique_id, size: audio.file_size, name: audio.file_name, title: audio.title, performer: audio.performer, messageId: ctx.message.message_id});
             }
         });
 
