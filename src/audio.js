@@ -22,7 +22,7 @@ export class Audio {
         this.posterId = null;
 
         /** @type {boolean} */
-        this.posterSquare = false;
+        this.posterFormatted = false;
 
         /** @type {number | null} */
         this.logId = null;
@@ -66,6 +66,9 @@ export class AudioSource {
 
         /** @type {Segment[] | null} */
         this.segments = null;
+
+        /** @type {Segment[] | null} */
+        this.silences = null;
 
         /** @type {boolean} */
         this.uploaded = false;

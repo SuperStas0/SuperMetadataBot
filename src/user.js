@@ -21,7 +21,7 @@ export class User {
 
     static maxSuggestions = 8;
 
-    static categoryNames = {sponsor: "Sponsor", selfpromo: "Self promotion", interaction: "Interaction reminder", intro: "Intro", outro: "Outro", preview: "Preview", music_offtopic: "Non-music", filler: "Filler"};
+    static categoryNames = {sponsor: "Sponsor", selfpromo: "Self promotion", interaction: "Interaction reminder", intro: "Intro", outro: "Outro", preview: "Preview", music_offtopic: "Non-music", filler: "Filler", silence: "Silence"};
 
     /**
      * @param {Context} ctx
@@ -207,11 +207,10 @@ export class User {
                 return sent ? this.decline() : this.decline(`This audio is over the ${Network.botFileLimit / 1024 / 1024} MB limit of this bot. Host your own bot to remove the limit: https://github.com/SuperStas0/SuperMetadata`);
             }
             this.clearStatus();
-            var segments = this.mode == "playlist" ? null : this.loadSegments();
+            this.loadSegments(audio.source);
             await this.sendSource(signal);
             signal.throwIfAborted();
             History.record(this, audio);
-            if (segments && await segments && audio.source.segments.length) this.notify(`SponsorBlock: ${audio.source.segments.length} segments found, see Cuts`);
             this.status = "default";
         }
         catch (error) {
@@ -588,7 +587,7 @@ export class User {
         }
         this.updateStatus(`Uploading: ${source.title}`);
         var poster = Files.path(source.path, "poster.jpg");
-        var thumbnail = Files.exists(poster) ? {source: await this.getSquare(poster).catch(() => poster)} : undefined;
+        var thumbnail = Files.exists(poster) ? {source: await this.getFormatted(poster).catch(() => poster)} : undefined;
         var msg = await Network.uploadFile(this.id, Files.path(source.path, source.file), {title: source.title, performer: source.performer, duration: source.duration, thumbnail: thumbnail}, this.progress(`Uploading: ${source.title}`, signal), signal);
         audio.sourceMessage = msg.message_id;
         source.id = msg.audio.file_id;
@@ -638,7 +637,9 @@ export class User {
         this.clearStatus();
         var audio = this.getAudio();
         if (mode == "cuts") {
-            await this.loadSegments();
+            if (!audio.source.silences) this.updateStatus("Looking for silence");
+            await Promise.all([this.loadSegments(audio.source), this.loadSilences(audio.source)]);
+            this.clearStatus();
             if (this.status == "loading" || this.status == "none") return;
         }
         var menuText = this.getMenuText(mode).replaceAll(".", "\\.").replaceAll("-", "\\-");
@@ -659,23 +660,23 @@ export class User {
                 this.removeMenu();
                 var poster = audio.posterId;
                 if (audio.poster == "default") poster = audio.source.posterId ?? {source: Files.path(audio.source.path, "poster.jpg")};
-                if (audio.posterSquare) poster = {source: await this.getPosterFile()};
-                var markup = audio.poster == "default" ? (audio.posterSquare ? Menus.PosterDefaultSquare : Menus.PosterDefault) : (audio.posterSquare ? Menus.PosterCustomSquare : Menus.PosterCustom);
+                if (audio.posterFormatted) poster = {source: await this.getPosterFile()};
+                var markup = Menus.GeneratePoster(audio.poster, audio.posterFormatted, audio.source.uploaded);
                 var msg = await App.app.telegram.sendPhoto(this.id, poster, {...markup, caption: menuText});
                 this.menu = msg.message_id;
-                if (audio.poster == "default" && !audio.source.posterId && !audio.posterSquare) {
+                if (audio.poster == "default" && !audio.source.posterId && !audio.posterFormatted) {
                     audio.source.posterId = msg.photo.toReversed()[0].file_id;
                     Files.saveAudio(audio.source.path, audio.source);
                 }
             }
             else {
                 try {
-                    await App.app.telegram.editMessageText(this.id, this.menu, null, menuText, Menus.DefaultOnly);
+                    await App.app.telegram.editMessageText(this.id, this.menu, null, menuText, Menus.GeneratePoster(null, false, audio.source.uploaded));
                 }
                 catch (error) {
                     if (!error.response?.description?.includes("no text in the message to edit")) Log.error(`Menu ${mode} (user ${this.id})`, error);
                     this.removeMenu();
-                    var msg = await App.app.telegram.sendMessage(this.id, menuText, Menus.DefaultOnly);
+                    var msg = await App.app.telegram.sendMessage(this.id, menuText, Menus.GeneratePoster(null, false, audio.source.uploaded));
                     this.menu = msg.message_id;
                 }
             }
@@ -692,14 +693,16 @@ export class User {
     }
 
     /**
+     * @param {AudioSource} source
      * @returns {Promise<boolean>}
      */
-    async loadSegments() {
-        var source = this.getAudio().source;
+    async loadSegments(source) {
         if (source.segments) return true;
         var id = source.url && Utility.getIdFromUrl(source.url);
         try {
-            source.segments = id ? await Network.fetchSegments(id, source.duration) : [];
+            await Utility.lock(`${source.path}#segments`, async () => {
+                source.segments ??= id ? await Network.fetchSegments(id, source.duration) : [];
+            });
             return true;
         }
         catch (error) {
@@ -708,9 +711,34 @@ export class User {
         }
     }
 
+    /**
+     * @param {AudioSource} source
+     * @returns {Promise<boolean>}
+     */
+    async loadSilences(source) {
+        if (source.silences) return true;
+        try {
+            await Utility.lock(`${source.path}#silences`, async () => {
+                if (source.silences) return;
+                var saved = Files.exists(source.path, "data.json") ? Files.loadAudio(source.path) : null;
+                source.silences = saved?.silences ?? await Utility.queue("silence", 1, () => Files.detectSilence(Files.path(source.path, source.file)));
+                if (saved && !saved.silences) {
+                    saved.silences = source.silences;
+                    Files.saveAudio(source.path, saved);
+                }
+            });
+            return true;
+        }
+        catch (error) {
+            Log.error(`Silence ${source.path} (user ${this.id})`, error);
+            return false;
+        }
+    }
+
     getSuggestions() {
         var audio = this.getAudio();
-        return (audio.source.segments ?? []).filter(segment => !audio.cuts.some(([start, end]) => start <= segment.start && end >= segment.end)).slice(0, User.maxSuggestions);
+        var silences = (audio.source.silences ?? []).toSorted((first, second) => second.end - second.start - (first.end - first.start));
+        return [...(audio.source.segments ?? []), ...silences].filter(segment => !audio.cuts.some(([start, end]) => start <= segment.start && end >= segment.end)).slice(0, User.maxSuggestions).sort((first, second) => first.start - second.start);
     }
 
     /**
@@ -791,12 +819,12 @@ export class User {
         if (!mode) audio.poster = null;
         else if (mode == "default") {
             audio.poster = "default";
-            audio.posterSquare = !audio.source.uploaded;
+            audio.posterFormatted = !audio.source.uploaded;
         }
         else {
             audio.poster = "custom";
             audio.posterId = mode;
-            audio.posterSquare = false;
+            audio.posterFormatted = false;
         }
 
     }
@@ -808,7 +836,7 @@ export class User {
         var fileLink = await App.app.telegram.getFileLink(fileId).catch(() => null);
         if (!fileLink || !await Network.downloadImage(fileLink, this.getPosterPath()).catch(() => false)) return this.updateStatus("Failed to download poster");
         this.clearStatus();
-        Files.delete(this.getPosterPath().replace(/\.jpg$/, "-square.jpg"));
+        Files.delete(this.getPosterPath().replace(/\.jpg$/, "-formatted.jpg"));
         this.applyPoster(fileId);
         this.sendMenu("poster");
     }
@@ -980,33 +1008,33 @@ export class User {
     async getPosterFile() {
         var audio = this.getAudio();
         var path = audio.poster == "default" ? Files.path(audio.source.path, "poster.jpg") : this.getPosterPath();
-        return audio.posterSquare ? await this.getSquare(path) : path;
+        return audio.posterFormatted ? await this.getFormatted(path) : path;
     }
 
     /**
      * @param {string} poster
-     * @returns {Promise<string>} the square version, made when missing
+     * @returns {Promise<string>} the formatted version, made when missing
      */
-    async getSquare(poster) {
-        var square = poster.replace(/\.jpg$/, "-square.jpg");
-        if (!Files.exists(square)) await Files.square(poster, square);
-        return square;
+    async getFormatted(poster) {
+        var formatted = poster.replace(/\.jpg$/, "-formatted.jpg");
+        if (!Files.exists(formatted)) await Files.formatPoster(poster, formatted);
+        return formatted;
     }
 
-    async toggleSquare() {
+    async toggleFormat() {
         var audio = this.getAudio();
         if (this.status != "poster" || !audio.poster) return;
-        var value = !audio.posterSquare;
+        var value = !audio.posterFormatted;
         var changed = this.getAudios().filter(item => item.poster);
-        var previous = changed.map(item => item.posterSquare);
-        changed.forEach(item => item.posterSquare = value);
+        var previous = changed.map(item => item.posterFormatted);
+        changed.forEach(item => item.posterFormatted = value);
         try {
             if (value) await this.getPosterFile();
         }
         catch (error) {
-            Log.error(`Square poster (user ${this.id})`, error);
-            changed.forEach((item, index) => item.posterSquare = previous[index]);
-            return this.updateStatus("Failed to make the poster square");
+            Log.error(`Format poster (user ${this.id})`, error);
+            changed.forEach((item, index) => item.posterFormatted = previous[index]);
+            return this.updateStatus("Failed to format the poster");
         }
         this.sendMenu("poster");
     }
@@ -1045,7 +1073,7 @@ export class User {
         info.text += `Title: \`${info.title}\`\n`;
         info.text += info.performer ? `Performer: \`${info.performer}\`\n` : "No performer\n";
         info.text += `Duration: \`${Utility.getDurationString(info.duration)}\`\n`;
-        info.text += info.poster ? `Poster: ${{"default": audio.source.uploaded ? "Original" : "Youtube", "custom": "Custom"}[info.poster]}${audio.posterSquare ? ", square" : ""}` : "No poster";
+        info.text += info.poster ? `Poster: ${{"default": audio.source.uploaded ? "Original" : "Youtube", "custom": "Custom"}[info.poster]}${audio.posterFormatted ? ", formatted" : ""}` : "No poster";
         if (info.cuts.length) info.text += `\nCuts: ${info.cuts.length}, new duration \`${Utility.getDurationString(Utility.getDuration(info.duration, info.cuts))}\``;
 
         return info;
@@ -1066,7 +1094,7 @@ export class User {
             var suggestions = this.getSuggestions();
             var lines = [info.cuts.length ? "Cuts:" : "No cuts"];
             info.cuts.forEach((cut, index) => lines.push(`${index + 1}. ${format(cut)}`));
-            if (suggestions.length) lines.push("Suggested by SponsorBlock:");
+            if (suggestions.length) lines.push("Suggested cuts:");
             suggestions.forEach((segment, index) => lines.push(`${index + 1}. ${format([segment.start, segment.end])} ${User.categoryNames[segment.category]}`));
             lines.push("Send a range to cut out, for example 1:30 - 2:45, one range per line. Leave a side empty for the edge of the audio, for example 1:30 -");
             return lines.join("\n");

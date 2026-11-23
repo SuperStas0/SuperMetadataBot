@@ -22,11 +22,11 @@ Load audio into the bot by any of:
 - Audio or music files sent to the bot, up to 20 MB each, several at once load as a batch
 
 Then you can:
-- Cut out parts of the audio, with suggestions from SponsorBlock
+- Cut out parts of the audio, with suggestions from SponsorBlock and silence detection
 - Change title
 - Change performer
 - Change poster
-- Make the poster square
+- Format the poster: remove black edges, crop to 1:1 and resize to the Telegram poster size
 - Change duration
 
 Errors are written to `logs\error.log`. The admin can view the last one in the admin panel (`/admin`).

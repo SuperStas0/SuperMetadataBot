@@ -146,13 +146,10 @@ export class Panel {
      */
     static deleteAudio(ctx, user) {
         if (user.status != "default" || user.mode != "youtube") return ctx.answerCbQuery("Load a YouTube audio first", {show_alert: true}).catch(() => {});
-        ctx.answerCbQuery().catch(() => {});
-        ctx.deleteMessage().catch(() => {});
-        this.message = null;
+        Files.delete(user.getSourcePath());
         user.removeMenu();
         user.status = "none";
-        Files.delete(user.getSourcePath());
-        user.parseLink().then(() => user.sendMenu("new"));
+        ctx.answerCbQuery("Audio deleted from the server").catch(() => {});
     }
 
     /**

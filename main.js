@@ -164,7 +164,7 @@ export class App {
 
         this.action("poster", user => user.sendMenu("poster"));
 
-        this.action("square", user => user.toggleSquare());
+        this.action("format", user => user.toggleFormat());
 
         this.action("playlistLoad", user => user.loadPending());
 

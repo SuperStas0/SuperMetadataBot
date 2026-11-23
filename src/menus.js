@@ -69,11 +69,17 @@ export class Menus {
 
     static Confirm = this.GenerateMarkup(["Load all", "playlistLoad", 0], ["Cancel", "playlistCancel", 1]);
 
-    static PosterDefault = this.GenerateMarkup(["Make square", "square", 0], ["Remove", "null", 1], ["Back", "cancel", 2]);
-
-    static PosterDefaultSquare = this.GenerateMarkup(["Make original", "square", 0], ["Remove", "null", 1], ["Back", "cancel", 2]);
-
-    static PosterCustom = this.GenerateMarkup(["Make square", "square", 0], ["Set default", "default", 1], ["Remove", "null", 2], ["Back", "cancel", 3]);
-
-    static PosterCustomSquare = this.GenerateMarkup(["Make original", "square", 0], ["Set default", "default", 1], ["Remove", "null", 2], ["Back", "cancel", 3]);
+    /**
+     * @param {PosterMode} poster
+     * @param {boolean} formatted
+     * @param {boolean} uploaded
+     */
+    static GeneratePoster(poster, formatted, uploaded) {
+        var buttons = [];
+        if (poster) buttons.push([formatted ? "Unformat" : "Format", "format"]);
+        if (poster != "default") buttons.push([uploaded ? "Set original" : "Set youtube", "default"]);
+        if (poster) buttons.push(["Remove", "null"]);
+        buttons.push(["Back", "cancel"]);
+        return this.GenerateMarkup(...buttons.map(([name, command], row) => [name, command, row]));
+    }
 }

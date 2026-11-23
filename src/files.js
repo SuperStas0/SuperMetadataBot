@@ -19,6 +19,12 @@ export class Files {
 
     static defaults = {access: "private", shareCookies: "off", searchConfirm: "off", largeFiles: "off"};
 
+    static posterSizeLimit = 200 * 1024;
+
+    static silenceNoise = "-60dB";
+
+    static silenceDuration = 2;
+
     /** @type {string} */
     static startText = Utility.escapeMarkdown(this.read("static", "start.md"));
 
@@ -104,7 +110,7 @@ export class Files {
      * @param {AudioSource} data
      */
     static saveAudio(path, data) {
-        this.save(this.path(path, "data.json"), {id: data.id, posterId: data.posterId, title: data.title, performer: data.performer, duration: data.duration, limited: data.limited});
+        this.save(this.path(path, "data.json"), {id: data.id, posterId: data.posterId, title: data.title, performer: data.performer, duration: data.duration, limited: data.limited, silences: data.silences});
     }
 
     /**
@@ -254,7 +260,7 @@ export class Files {
         for (var user of this.list(this.path("downloads", "users"))) {
             for (var name of this.list(this.path("downloads", "users", user))) {
                 var path = this.path("downloads", "users", user, name);
-                if (/^poster(\d*|-batch)(-square)?\.jpg$/.test(name) && now - fs.statSync(path).mtimeMs > maxAge) this.tryDelete(path);
+                if (/^poster(\d*|-batch)(-square|-formatted)?\.jpg$/.test(name) && now - fs.statSync(path).mtimeMs > maxAge) this.tryDelete(path);
             }
         }
     }
@@ -361,18 +367,74 @@ export class Files {
     }
 
     /**
+     * Removes black edges, crops to 1:1 and resizes to fit the Telegram thumbnail limits
      * @param {string} inputPath
      * @param {string} outputPath
      */
-    static async square(inputPath, outputPath) {
+    static async formatPoster(inputPath, outputPath) {
         var temp = outputPath.replace(/\.jpg$/, ".tmp.jpg");
+        var crop = await this.detectBlackEdges(inputPath);
+        var filters = ["crop='min(iw,ih)':'min(iw,ih)'", "scale=320:320"];
+        if (crop) filters.unshift(`crop=${crop}`);
         try {
-            await new Promise((resolve, reject) => ffmpeg(inputPath).videoFilters("crop='min(iw,ih)':'min(iw,ih)'", "scale=320:320").outputOptions("-frames:v", "1", "-q:v", "3").on("end", resolve).on("error", reject).save(temp));
+            for (var quality of [3, 8, 15]) {
+                await new Promise((resolve, reject) => ffmpeg(inputPath).videoFilters(filters).outputOptions("-frames:v", "1", "-q:v", String(quality)).on("end", resolve).on("error", reject).save(temp));
+                if (this.getFileSize(temp) <= this.posterSizeLimit) break;
+            }
         }
         catch (error) {
             this.tryDelete(temp);
             throw error;
         }
         this.move(temp, outputPath);
+    }
+
+    /**
+     * @param {string} inputPath
+     * @returns {Promise<string | null>} width:height:x:y of the image without black edges, null if nothing to trim
+     */
+    static async detectBlackEdges(inputPath) {
+        var size = null;
+        var crop = null;
+        var command = ffmpeg(inputPath).videoFilters("cropdetect=limit=32:round=2:skip=0").outputOptions("-frames:v", "1").format("null");
+        command.on("stderr", line => {
+            size = line.match(/Video:.*?(\d{2,5})x(\d{2,5})/)?.slice(1).map(Number) ?? size;
+            crop = line.match(/crop=(\d+):(\d+):(\d+):(\d+)/)?.slice(1).map(Number) ?? crop;
+        });
+        try {
+            await this.runFfmpeg(command, "-");
+        }
+        catch {
+            return null;
+        }
+        if (!size || !crop) return null;
+        var area = crop[0] * crop[1];
+        if (crop[0] < 64 || crop[1] < 64 || area < size[0] * size[1] * 0.2 || area == size[0] * size[1]) return null;
+        return crop.join(":");
+    }
+
+    /**
+     * @param {string} inputPath
+     * @returns {Promise<Segment[]>}
+     */
+    static async detectSilence(inputPath) {
+        var silences = [];
+        var start = null;
+        var duration = 0;
+        var command = ffmpeg(inputPath).noVideo().audioFilters(`silencedetect=noise=${this.silenceNoise}:d=${this.silenceDuration}`).format("null");
+        command.on("stderr", line => {
+            var total = line.match(/Duration: (\d+:\d+:[\d.]+)/)?.[1];
+            if (total) duration = Utility.parseClock(total);
+            var begin = line.match(/silence_start: (-?[\d.]+)/)?.[1];
+            if (begin) start = Math.max(0, Number(begin));
+            var end = line.match(/silence_end: ([\d.]+)/)?.[1];
+            if (end && start != null) {
+                silences.push({start: start, end: Number(end), category: "silence"});
+                start = null;
+            }
+        });
+        await this.runFfmpeg(command, "-");
+        if (start != null) silences.push({start: start, end: duration, category: "silence"});
+        return silences.map(silence => ({start: Math.ceil(silence.start * 10) / 10, end: Math.floor(Math.min(silence.end, duration || silence.end) * 10) / 10, category: "silence"})).filter(silence => silence.end - silence.start >= 1);
     }
 }
