@@ -8,3 +8,4 @@ static/settings.json*
 static/cookies.txt
 setup.js
 release/
+restart.sh

@@ -232,6 +232,22 @@ export class Utility {
      * @param {number} max
      * @param {() => Promise<any>} task
      */
+    /**
+     * @template T
+     * @param {Promise<T>} promise
+     * @param {AbortSignal} [signal]
+     * @returns {Promise<T>} rejects as soon as the signal aborts, the work itself is not stopped
+     */
+    static abortable(promise, signal) {
+        if (!signal) return promise;
+        return new Promise((resolve, reject) => {
+            if (signal.aborted) return reject(signal.reason);
+            var onAbort = () => reject(signal.reason);
+            signal.addEventListener("abort", onAbort, {once: true});
+            promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+        })
+    }
+
     static async queue(name, max, task) {
         var queue = this.queues[name] ??= {running: 0, waiting: []};
         if (queue.running >= max) await new Promise(resolve => queue.waiting.push(resolve));

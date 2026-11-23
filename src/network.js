@@ -1,9 +1,13 @@
 import { App } from "../main.js";
 import { Files } from "./files.js";
 import { Log } from "./log.js";
+import { Utility } from "./utility.js";
 import { YtDlp } from "ytdlp-nodejs";
 import ffmpegStatic from "ffmpeg-static";
 import dns from "node:dns";
+import fs from "node:fs";
+import { basename } from "node:path";
+import { pipeline, Transform } from "node:stream";
 import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions/index.js";
 import { Logger } from "telegram/extensions/index.js";
@@ -70,13 +74,24 @@ export class Network {
      * @param {string} url
      * @param {number} sizeLimit
      * @param {number} [timeout]
+     * @param {(fraction: number) => void} [onProgress]
+     * @param {AbortSignal} [signal]
      * @returns {Promise<Buffer | null>}
      */
-    static async downloadFile(url, sizeLimit, timeout = 15 * 1000) {
-        var response = await fetch(url, {signal: AbortSignal.timeout(timeout)});
+    static async downloadFile(url, sizeLimit, timeout = 15 * 1000, onProgress, signal) {
+        var response = await fetch(url, {signal: AbortSignal.any(signal ? [AbortSignal.timeout(timeout), signal] : [AbortSignal.timeout(timeout)])});
         if (!response.ok) return null;
-        var buffer = Buffer.from(await response.arrayBuffer());
-        return buffer.length <= sizeLimit ? buffer : null;
+        var total = Number(response.headers.get("content-length")) || 0;
+        if (total > sizeLimit) return null;
+        var chunks = [];
+        var received = 0;
+        for await (var chunk of response.body) {
+            received += chunk.length;
+            if (received > sizeLimit) return null;
+            chunks.push(chunk);
+            if (total) onProgress?.(received / total);
+        }
+        return Buffer.concat(chunks);
     }
 
     /**
@@ -157,14 +172,22 @@ export class Network {
      * @param {string} path
      * @param {boolean | null} allowLarge
      * @param {string | null} [cookies]
+     * @param {(fraction: number) => void} [onProgress]
+     * @param {AbortSignal} [signal]
      */
-    static downloadMusic(url, path, allowLarge, cookies) {
+    static async downloadMusic(url, path, allowLarge, cookies, onProgress, signal) {
+        signal?.throwIfAborted();
         var settings = {
             format: allowLarge ? { filter: "audioonly", type: "m4a", quality: "highest" } : "bestaudio[ext=m4a][filesize<50M]/bestaudio[filesize<50M]/worstaudio",
             output: Files.path(path, allowLarge ? "audio.m4a" : "audio-limited.m4a"),
             noPlaylist: true
         }
-        return this.withCookies(cookies, copy => this.ytdlp.downloadAsync(url, {...settings, cookies: copy}));
+        return await this.withCookies(cookies, copy => {
+            var download = this.ytdlp.download(url, {...settings, cookies: copy});
+            if (onProgress) download.on("progress", progress => onProgress(progress.percentage != null ? progress.percentage / 100 : progress.total ? progress.downloaded / progress.total : NaN));
+            signal?.addEventListener("abort", () => download.kill(), {once: true});
+            return download.run();
+        });
     }
 
     /**
@@ -184,15 +207,29 @@ export class Network {
      * @param {number} chat
      * @param {string} path
      * @param {ExtraAudio} settings
+     * @param {(fraction: number) => void} [onProgress]
+     * @param {AbortSignal} [signal]
      */
-    static async uploadFile(chat, path, settings) {
-        if (Files.getFileSize(path) < this.botFileLimit) {
-            return await App.app.telegram.sendAudio(chat, {source: path}, settings);
-        }
-        else {
-            var upload = this.largeQueue.then(() => this.uploadLarge(chat, path, settings));
+    static async uploadFile(chat, path, settings, onProgress, signal) {
+        signal?.throwIfAborted();
+        var size = Files.getFileSize(path);
+        if (size >= this.botFileLimit) {
+            var upload = this.largeQueue.then(() => this.uploadLarge(chat, path, settings, onProgress, signal));
             this.largeQueue = upload.catch(() => {});
-            return await upload;
+            return await Utility.abortable(upload, signal);
+        }
+        var sent = 0;
+        var counter = new Transform({transform: (chunk, encoding, done) => {
+            sent += chunk.length;
+            onProgress?.(sent / size);
+            done(null, chunk);
+        }});
+        var source = pipeline(fs.createReadStream(path), counter, () => {});
+        try {
+            return await App.app.telegram.callApi("sendAudio", {chat_id: chat, audio: {source: source, filename: basename(path)}, ...settings}, {signal: signal});
+        }
+        finally {
+            source.destroy();
         }
     }
 
@@ -200,8 +237,11 @@ export class Network {
      * @param {number} chat
      * @param {string} path
      * @param {ExtraAudio} settings
+     * @param {(fraction: number) => void} [onProgress]
+     * @param {AbortSignal} [signal]
      */
-    static async uploadLarge(chat, path, settings) {
+    static async uploadLarge(chat, path, settings, onProgress, signal) {
+        signal?.throwIfAborted();
         var hash = Math.random().toString();
 
         if (settings?.thumbnail) settings.thumbnail = settings.thumbnail.source;
@@ -209,17 +249,13 @@ export class Network {
         var resolveFn;
         var filePromise = new Promise(resolve => { resolveFn = resolve; });
         var timer;
-        var shown = -5;
+        var progress = fraction => onProgress?.(fraction);
+        signal?.addEventListener("abort", () => { progress.isCanceled = true; }, {once: true});
         App.largeFiles[hash] = resolveFn;
 
         try {
-            var msg = (await App.data[chat].statusMessage).text;
-
-            await this.withUserClient(client => {
-                shown = -5;
-                return client.sendFile(App.app.botInfo.username, {file: path, caption: hash, thumb: settings.thumbnail, progressCallback: progress => { if (progress * 100 < shown + 5) return; shown = Math.floor(progress * 100); App.data[chat].updateStatus(`${msg}\n${shown}%`); }, attributes: [new Api.DocumentAttributeAudio({duration: settings.duration, title: settings.title, performer: settings.performer})]});
-            })
-            var fileId = await Promise.race([filePromise, new Promise((resolve, reject) => { timer = setTimeout(() => reject(new Error("Large file was not received by the bot, check that the user client account is the admin")), 60 * 1000); })]);
+            await this.withUserClient(client => client.sendFile(App.app.botInfo.username, {file: path, caption: hash, thumb: settings.thumbnail, progressCallback: progress, attributes: [new Api.DocumentAttributeAudio({duration: settings.duration, title: settings.title, performer: settings.performer})]}));
+            var fileId = await Utility.abortable(Promise.race([filePromise, new Promise((resolve, reject) => { timer = setTimeout(() => reject(new Error("Large file was not received by the bot, check that the user client account is the admin")), 60 * 1000); })]), signal);
         }
         finally {
             clearTimeout(timer);
@@ -254,6 +290,7 @@ export class Network {
                     return await task(await this.getUserClient());
                 }
                 catch (error) {
+                    if (error.message == "USER_CANCELED") throw error;
                     await this.dropUserClient();
                     if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED|USER_DEACTIVATED/.test(error.errorMessage ?? "")) throw new Error("User client session is no longer valid, run the build script with -s to log in again");
                     if (attempt >= 2) throw error;

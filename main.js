@@ -28,6 +28,15 @@ export class App {
     static clearing = new Set();
 
     /**
+     * @param {number} [id]
+     */
+    static hasAccess(id) {
+        if (id == Files.config.admin) return true;
+        var access = Files.getSetting("access");
+        return access == "public" || access == "confirm" && !!Files.settings.allowed?.includes(id);
+    }
+
+    /**
      * @param {string | RegExp} trigger
      * @param {(user: User, ctx: Context) => any} handler
      */
@@ -84,9 +93,10 @@ export class App {
         process.once("SIGTERM", () => this.stop("SIGTERM"));
 
         this.app.use(async (ctx, next) => {
-            if (Files.settings.locked && ctx.from?.id != Files.config.admin) {
-                if (ctx.callbackQuery) ctx.answerCbQuery("This bot is private").catch(() => {});
-                else if (ctx.chat?.type == "private") ctx.reply("This bot is private").catch(() => {});
+            if (!this.hasAccess(ctx.from?.id)) {
+                var confirm = Files.getSetting("access") == "confirm";
+                if (ctx.callbackQuery) ctx.answerCbQuery(confirm ? "Access is not allowed yet" : "This bot is private").catch(() => {});
+                else if (ctx.chat?.type == "private") ctx.reply(confirm ? Panel.requestAccess(ctx.from.id, User.getName(ctx)) : "This bot is private").catch(() => {});
                 return;
             }
             if (ctx.chat?.type == "private") {
@@ -134,7 +144,7 @@ export class App {
             }
         })
 
-        this.action("cancel", user => user.sendMenu(user.status == "poster" && user.getAudio().poster ? "new" : "default"));
+        this.action("cancel", user => user.back());
 
         this.action("next", user => {
             if (user.mode != "playlist" || user.playlistId + 1 == user.playlist.length) return;
@@ -205,6 +215,11 @@ export class App {
             }
         })
 
+        this.app.command("cancel", async ctx => {
+            if (ctx.chat.type != "private") return;
+            User.getUser(ctx).cancel();
+        })
+
         this.app.command("admin", async ctx => {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
@@ -218,10 +233,10 @@ export class App {
             await Panel.handle(ctx, user, ctx.match[1], Number(ctx.match[2] ?? 0));
         })
 
-        this.app.action(/^large:(allow|deny):(\d+)$/, async ctx => {
+        this.app.action(/^ask:(allow|deny):(\d+)$/, async ctx => {
             var user = User.getUser(ctx);
             if (!user.isAdmin()) return ctx.answerCbQuery().catch(() => {});
-            var done = Panel.answer(Number(ctx.match[2]), ctx.match[1] == "allow");
+            var done = Panel.answer(Number(ctx.match[2]), ctx.match[1]);
             ctx.answerCbQuery(done ? undefined : "Request expired").catch(() => {});
         })
 
@@ -232,7 +247,7 @@ export class App {
         this.app.command("cookies", async ctx => {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
-            ctx.reply(`${Files.cookiesText}\nCookies: *${user.hasCookies() ? "saved" : "not saved"}*${!user.hasCookies() && user.getCookies() ? "\n_The bot admin shares their cookies with you, sending your own is optional_" : ""}`, Menus.Simple);
+            ctx.reply(`${Files.cookiesText}\nCookies: *${user.hasCookies() ? "saved" : "not saved"}*${!user.hasCookies() && user.getSharedCookies() ? `\n_The bot admin shares their cookies with you${Files.getSetting("shareCookies") == "confirm" ? " after confirming" : ""}, sending your own is optional_` : ""}`, Menus.Simple);
         })
 
         this.app.command("removecookies", async ctx => {

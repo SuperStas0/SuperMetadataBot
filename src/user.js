@@ -59,6 +59,67 @@ export class User {
         this.askQuery = null;
         /** @type {number | null} */
         this.askMenu = null;
+        /** @type {AbortController | null} */
+        this.controller = null;
+        /** @type {(() => void) | null} */
+        this.onCancel = null;
+    }
+
+    /**
+     * @param {() => void} onCancel restores the state if the action is cancelled
+     * @returns {AbortSignal}
+     */
+    startAction(onCancel) {
+        this.controller = new AbortController();
+        this.onCancel = onCancel;
+        return this.controller.signal;
+    }
+
+    cancel() {
+        clearTimeout(this.incomingTimer);
+        var dropped = this.incoming.length > 0;
+        this.incoming = [];
+        if (this.status == "loading" && this.controller) {
+            var onCancel = this.onCancel;
+            this.controller.abort();
+            this.controller = null;
+            this.onCancel = null;
+            onCancel?.();
+            return this.notify("Cancelled");
+        }
+        if (["title", "performer", "poster", "cuts"].includes(this.status)) return this.back();
+        if (!dropped && !this.askQuery && !this.results && !this.confirm) return this.notify("Nothing to cancel");
+        this.removeAsk();
+        this.removeSearch();
+        this.removeConfirm();
+        return this.notify("Cancelled");
+    }
+
+    back() {
+        return this.sendMenu(this.status == "poster" && this.getAudio().poster ? "new" : "default");
+    }
+
+    restoreMenu() {
+        this.status = "default";
+        this.clearStatus();
+        this.sendMenu("new");
+    }
+
+    /**
+     * @param {string} text
+     * @param {AbortSignal} signal
+     * @returns {(fraction: number) => void} shows the percent under the text, at most every 5% and 1.5 seconds
+     */
+    progress(text, signal) {
+        var shown = -5;
+        var time = 0;
+        return fraction => {
+            var percent = Math.floor(fraction * 100);
+            if (signal.aborted || !(percent >= shown + 5 && percent < 100) || Date.now() - time < 1500) return;
+            shown = percent;
+            time = Date.now();
+            this.updateStatus(`${text}\n${percent}%`);
+        };
     }
 
     getAudio() {
@@ -66,10 +127,12 @@ export class User {
     }
 
     /**
+     * @param {AbortSignal} [signal] of the action that loads several audios
      * @returns {Promise<boolean>}
      */
-    async parseLink() {
+    async parseLink(signal) {
         this.status = "loading";
+        signal ??= this.startAction(() => this.decline());
 
         var audio = this.getAudio();
         var id = Utility.getIdFromUrl(audio.source.url);
@@ -77,22 +140,14 @@ export class User {
         var url = audio.source.url;
         var path = this.getSourcePath();
         var admin = this.isAdmin();
-        var large = admin || (Files.settings.largeFiles ?? "off") != "off";
-        var own = this.getCookies();
+        var large = admin || Files.getSetting("largeFiles") != "off";
         var cookies = null;
         var file;
 
-        var run = async task => {
-            var used = cookies;
-            try {
-                return await task(used);
-            }
-            catch (error) {
-                if (used || !own || !Network.needsCookies(error)) throw error;
-                cookies = own;
-                return await task(cookies);
-            }
-        };
+        var run = async task => cookies ? await task(cookies) : await this.withCookies(async used => {
+            if (used) cookies = used;
+            return await task(used);
+        }, url, signal);
 
         if (!Files.list(path).some(name => name.endsWith(".m4a")) && Files.getFreeSpace() < Network.minFreeSpace) {
             App.clean(true);
@@ -123,19 +178,23 @@ export class User {
                 file = large || Files.exists(best) && Files.getFileSize(best) < Network.botFileLimit ? "audio.m4a" : "audio-limited.m4a";
                 if (!Files.exists(Files.path(path, file))) {
                     this.updateStatus(`Downloading: ${url}`);
-                    tasks.push(Utility.queue("download", Network.maxDownloads, () => Utility.timeout(run(used => Network.downloadMusic(url, path, large, used)), Network.downloadTimeout, "Downloading timed out")).then(() => this.updateStatus(`Fetching: ${url}`)));
+                    tasks.push(Utility.queue("download", Network.maxDownloads, () => Utility.timeout(run(used => Network.downloadMusic(url, path, large, used, this.progress(`Downloading: ${url}`, signal), signal)), Network.downloadTimeout, "Downloading timed out")).then(() => {
+                        if (!signal.aborted) this.updateStatus(`Fetching: ${url}`);
+                    }));
                 }
                 if (!Files.exists(Files.path(path, "poster.jpg"))) tasks.push(run(used => Network.downloadPoster(url, path, used, metadata?.thumbnails)));
 
                 await Promise.all(tasks);
+                signal.throwIfAborted();
                 Files.touch(Files.path(path, file));
             });
-            await fetchFiles();
+            await Utility.abortable(fetchFiles(), signal);
             var size = () => Files.getFileSize(Files.path(path, file));
-            if (!admin && large && size() >= Network.botFileLimit && !await this.allowLarge(Files.loadAudio(path).title, size())) {
+            if (!admin && large && size() >= Network.botFileLimit && !await this.allowLarge(Files.loadAudio(path).title, size(), signal)) {
                 large = false;
-                await fetchFiles();
+                await Utility.abortable(fetchFiles(), signal);
             }
+            signal.throwIfAborted();
             App.clean(true);
 
             audio.source = Files.loadAudio(path);
@@ -149,12 +208,14 @@ export class User {
             }
             this.clearStatus();
             var segments = this.mode == "playlist" ? null : this.loadSegments();
-            await this.sendSource();
+            await this.sendSource(signal);
+            signal.throwIfAborted();
             History.record(this, audio);
             if (segments && await segments && audio.source.segments.length) this.notify(`SponsorBlock: ${audio.source.segments.length} segments found, see Cuts`);
             this.status = "default";
         }
         catch (error) {
+            if (signal.aborted) return false;
             Log.error(`Load ${url} (user ${this.id})`, error);
             if (Network.needsCookies(error)) this.decline(this.getBlockedText());
             else this.decline(`Failed to load: ${url}`);
@@ -181,15 +242,15 @@ export class User {
         if (this.status == "loading") return this.updateStatus("Please wait for previous request to finish");
         if (this.status != "none" && this.status != "default") return;
         var previous = this.status;
+        var signal = this.startAction(() => {
+            this.clearStatus();
+            this.status = previous;
+        });
         this.status = "loading";
         this.removeSearch();
         this.updateStatus(`Searching: ${query}`);
         try {
-            var own = this.getCookies();
-            var results = await Utility.timeout(Network.fetchSearch(query).catch(error => {
-                if (!own || !Network.needsCookies(error)) throw error;
-                return Network.fetchSearch(query, own);
-            }), Network.infoTimeout, "Search timed out");
+            var results = await Utility.abortable(Utility.timeout(this.withCookies(cookies => Network.fetchSearch(query, cookies), query, signal), Network.infoTimeout, "Search timed out"), signal);
             this.clearStatus();
             this.status = previous;
             if (!results.length) return this.notify(`Nothing found: ${query}`);
@@ -199,6 +260,7 @@ export class User {
             this.searchMenu = msg.message_id;
         }
         catch (error) {
+            if (signal.aborted) return;
             Log.error(`Search ${query} (user ${this.id})`, error);
             this.clearStatus();
             this.status = previous;
@@ -209,15 +271,16 @@ export class User {
     /**
      * @param {string} title
      * @param {number} size
+     * @param {AbortSignal} [signal]
      * @returns {Promise<boolean>}
      */
-    async allowLarge(title, size) {
+    async allowLarge(title, size, signal) {
         if (this.isAdmin()) return true;
-        var mode = Files.settings.largeFiles ?? "off";
+        var mode = Files.getSetting("largeFiles");
         if (mode == "on") return true;
         if (mode != "confirm") return false;
         this.updateStatus(`Waiting for the admin to allow a large file: ${title}`);
-        return await Panel.askLarge(this, title, size);
+        return await Panel.askLarge(this, title, size, signal);
     }
 
     /**
@@ -227,7 +290,7 @@ export class User {
         var query = text.replace(/\s+/g, " ").trim().slice(0, 200);
         if (!query) return;
         this.removeAsk();
-        var mode = Files.settings.searchConfirm ?? "on";
+        var mode = Files.getSetting("searchConfirm");
         if (mode == "off" || mode == "nonadmin" && this.isAdmin()) return this.search(query);
         this.askQuery = query;
         var msg = await App.app.telegram.sendMessage(this.id, `Search for \`${Utility.escapeCode(query)}\`?`, Menus.SearchAsk);
@@ -299,9 +362,11 @@ export class User {
 
     /**
      * @param {TelegramFile} file
+     * @param {AbortSignal} signal
+     * @param {string} [counter] position in a batch for the status text
      * @returns {Promise<AudioSource>}
      */
-    async importFile(file) {
+    async importFile(file, signal, counter = "") {
         var title = User.getFileTitle(file);
         var performer = file.performer ? file.performer.slice(0, User.textLimit) : null;
         var path = Files.path("downloads", "telegram", file.uniqueId);
@@ -311,7 +376,7 @@ export class User {
             if (Files.getFreeSpace() < Network.minFreeSpace) throw User.expected("Not enough free space on the server, try again later");
         }
 
-        await Utility.lock(path, async () => {
+        await Utility.abortable(Utility.lock(path, async () => {
             var best = Files.path(path, "audio.m4a");
             if (Files.exists(path, "data.json") && Files.exists(best)) return Files.touch(best);
 
@@ -322,16 +387,16 @@ export class User {
             var original = Files.path(path, `original${ext}`);
             var temp = Files.path(path, "tmp-audio.m4a");
             try {
-                var buffer = await Network.downloadFile(link, Network.telegramFileLimit, Network.fileTimeout);
+                var buffer = await Network.downloadFile(link, Network.telegramFileLimit, Network.fileTimeout, this.progress(`Downloading${counter}: ${title}`, signal), signal);
                 if (!buffer) throw new Error("Failed to download the file");
                 Files.write(original, buffer);
                 var duration;
                 try {
-                    duration = await Files.importAudio(original, temp, ext == ".m4a");
+                    duration = await Files.importAudio(original, temp, ext == ".m4a", signal, this.progress(`Converting${counter}: ${title}`, signal));
                 }
                 catch (error) {
-                    if (ext != ".m4a") throw error;
-                    duration = await Files.importAudio(original, temp, false);
+                    if (ext != ".m4a" || signal.aborted) throw error;
+                    duration = await Files.importAudio(original, temp, false, signal, this.progress(`Converting${counter}: ${title}`, signal));
                 }
                 if (!duration) throw new Error("Failed to read the audio duration");
                 if (duration > Network.maxDuration) throw User.expected("Audio is too long");
@@ -343,7 +408,8 @@ export class User {
                 Files.tryDelete(original);
                 Files.tryDelete(temp);
             }
-        })
+        }), signal)
+        signal.throwIfAborted();
 
         var source = Files.loadAudio(path);
         source.url = file.uniqueId;
@@ -352,7 +418,7 @@ export class User {
         source.performer = performer;
         source.uploaded = true;
         var size = Files.getFileSize(Files.path(path, source.file));
-        if (size >= Network.botFileLimit && !await this.allowLarge(title, size)) throw User.expected(`This audio is over the ${Network.botFileLimit / 1024 / 1024} MB limit of this bot. Host your own bot to remove the limit: https://github.com/SuperStas0/SuperMetadata`);
+        if (size >= Network.botFileLimit && !await this.allowLarge(title, size, signal)) throw User.expected(`This audio is over the ${Network.botFileLimit / 1024 / 1024} MB limit of this bot. Host your own bot to remove the limit: https://github.com/SuperStas0/SuperMetadata`);
         return source;
     }
 
@@ -375,11 +441,15 @@ export class User {
     async parseFile(file) {
         var previous = this.status;
         var title = User.getFileTitle(file);
+        var signal = this.startAction(() => {
+            this.clearStatus();
+            this.status = previous;
+        });
         this.status = "loading";
         this.updateStatus(`Loading: ${title}`);
 
         try {
-            var source = await this.importFile(file);
+            var source = await this.importFile(file, signal);
             this.removeSearch();
             this.mode = "telegram";
             this.audio = this.createAudio(source, file);
@@ -389,6 +459,7 @@ export class User {
             await this.sendMenu("new");
         }
         catch (error) {
+            if (signal.aborted) return;
             if (!error.user) Log.error(`Load file ${title} (user ${this.id})`, error);
             this.fail(previous, error.user ? error.message : `Failed to load: ${title}`);
         }
@@ -401,15 +472,21 @@ export class User {
         var previous = this.status;
         var audios = [];
         var failed = [];
+        var signal = this.startAction(() => {
+            this.clearStatus();
+            this.status = previous;
+        });
         this.status = "loading";
 
         for (var file of files) {
             var title = User.getFileTitle(file);
-            this.updateStatus(`Loading ${audios.length + failed.length + 1}/${files.length}: ${title}`);
+            var counter = ` ${audios.length + failed.length + 1}/${files.length}`;
+            this.updateStatus(`Loading${counter}: ${title}`);
             try {
-                audios.push(this.createAudio(await this.importFile(file), file));
+                audios.push(this.createAudio(await this.importFile(file, signal, counter), file));
             }
             catch (error) {
+                if (signal.aborted) return;
                 if (!error.user) Log.error(`Load file ${title} (user ${this.id})`, error);
                 failed.push(error.user ? `${title}: ${error.message}` : title);
             }
@@ -451,8 +528,12 @@ export class User {
         return false;
     }
 
-    async send() {
+    /**
+     * @param {AbortSignal} [signal] of the action that sends several audios
+     */
+    async send(signal) {
         if (this.status != "default") return;
+        signal ??= this.startAction(() => this.restoreMenu());
 
         var audio = this.getAudio();
         var source = audio.source;
@@ -466,18 +547,21 @@ export class User {
         this.removeMenu();
 
         try {
-            if (audio.cuts.length) await Files.cut(Files.path(source.path, source.file), audioPath, Utility.getKept(audio.cuts, source.duration));
+            if (audio.cuts.length) await Files.cut(Files.path(source.path, source.file), audioPath, Utility.getKept(audio.cuts, source.duration), signal);
             else Files.copy(Files.path(source.path, source.file), audioPath);
 
             var poster = audio.poster && await this.getPosterFile();
-            await Network.uploadFile(this.id, audioPath, {title: title, performer: audio.performer, duration: duration, thumbnail: poster && {source: poster}});
+            await Network.uploadFile(this.id, audioPath, {title: title, performer: audio.performer, duration: duration, thumbnail: poster && {source: poster}}, this.progress(`Uploading: ${title}`, signal), signal);
             History.update(audio);
         }
         catch (error) {
-            Log.error(`Send ${title} (user ${this.id})`, error);
-            App.app.telegram.sendMessage(this.id, `Failed to send: ${title}`).catch(() => {});
+            if (!signal.aborted) {
+                Log.error(`Send ${title} (user ${this.id})`, error);
+                App.app.telegram.sendMessage(this.id, `Failed to send: ${title}`).catch(() => {});
+            }
         }
         Files.delete(audioPath);
+        if (signal.aborted) return;
 
         this.status = "default";
         this.clearStatus();
@@ -485,7 +569,10 @@ export class User {
 
     }
 
-    async sendSource() {
+    /**
+     * @param {AbortSignal} signal
+     */
+    async sendSource(signal) {
         var source = this.getAudio().source;
 
         if (source.id) {
@@ -498,7 +585,7 @@ export class User {
             }
         }
         this.updateStatus(`Uploading: ${source.title}`);
-        var msg = await Network.uploadFile(this.id, Files.path(source.path, source.file), {title: source.title, performer: source.performer, duration: source.duration, thumbnail: Files.exists(source.path, "poster.jpg") ? {source: Files.path(source.path, "poster.jpg")} : undefined});
+        var msg = await Network.uploadFile(this.id, Files.path(source.path, source.file), {title: source.title, performer: source.performer, duration: source.duration, thumbnail: Files.exists(source.path, "poster.jpg") ? {source: Files.path(source.path, "poster.jpg")} : undefined}, this.progress(`Uploading: ${source.title}`, signal), signal);
         source.id = msg.audio.file_id;
         source.limited = source.file != "audio.m4a";
         Files.saveAudio(source.path, source);
@@ -506,10 +593,12 @@ export class User {
     }
 
     async parsePlaylist() {
+        var signal = this.startAction(() => this.decline());
         this.playlistId = 0;
         while (this.playlistId < this.playlist.length) {
             this.setPoster("default");
-            if (await this.parseLink()) this.playlistId++;
+            if (await this.parseLink(signal)) this.playlistId++;
+            else if (signal.aborted) return;
             else this.playlist.splice(this.playlistId, 1);
         }
         this.status = this.playlist.length ? "default" : "none";
@@ -520,9 +609,14 @@ export class User {
     async sendPlaylist() {
         if (this.mode != "playlist" || this.status != "default") return;
         var last = this.playlistId;
+        var signal = this.startAction(() => {
+            this.playlistId = last;
+            this.restoreMenu();
+        });
         this.playlistId = 0;
         for (var _ of this.playlist) {
-            await this.send();
+            await this.send(signal);
+            if (signal.aborted) return;
             this.playlistId += 1;
         }
         this.playlistId = last;
@@ -722,11 +816,43 @@ export class User {
         return App.app.telegram.sendMessage(this.id, text).catch(() => {});
     }
 
-    getCookies() {
-        if (this.hasCookies()) return this.getCookiesPath();
-        if (!Files.settings.shareCookies || this.isAdmin()) return null;
+    getSharedCookies() {
+        if (this.isAdmin() || Files.getSetting("shareCookies") == "off") return null;
         var shared = Files.path("downloads", "users", String(Files.config.admin), "cookies.txt");
         return Files.exists(shared) ? shared : null;
+    }
+
+    /**
+     * @param {string} reason
+     * @param {AbortSignal} signal
+     * @returns {Promise<string | null>} cookies file to retry with
+     */
+    async askCookies(reason, signal) {
+        if (this.hasCookies()) return this.getCookiesPath();
+        var shared = this.getSharedCookies();
+        if (!shared) return null;
+        if (Files.getSetting("shareCookies") == "confirm") {
+            this.updateStatus(`Waiting for the admin to allow cookies: ${reason}`);
+            if (!await Panel.askCookies(this, reason, signal)) return null;
+        }
+        return shared;
+    }
+
+    /**
+     * @param {(cookies?: string) => Promise<any>} task runs without cookies first
+     * @param {string} reason
+     * @param {AbortSignal} signal
+     */
+    async withCookies(task, reason, signal) {
+        try {
+            return await task();
+        }
+        catch (error) {
+            if (!Network.needsCookies(error)) throw error;
+            var cookies = await this.askCookies(reason, signal);
+            if (!cookies) throw error;
+            return await task(cookies);
+        }
     }
 
     hasCookies() {
@@ -781,6 +907,7 @@ export class User {
      */
     async parseLists(lists, urls) {
         this.status = "loading";
+        var signal = this.startAction(() => this.decline());
         this.removeConfirm();
         this.updateStatus(`Fetching playlist: ${lists[0]}`);
 
@@ -788,7 +915,7 @@ export class User {
             var ids = new Set(urls.map(url => Utility.getIdFromUrl(url)));
             var title = null;
             for (var list of lists) {
-                var playlist = await Utility.timeout(this.fetchList(list), Network.playlistTimeout, "Fetching playlist timed out");
+                var playlist = await Utility.abortable(Utility.timeout(this.fetchList(list, signal), Network.playlistTimeout, "Fetching playlist timed out"), signal);
                 if (lists.length == 1) title = playlist.title;
                 playlist.ids.forEach(id => ids.add(id));
             }
@@ -803,6 +930,7 @@ export class User {
             this.confirm = msg.message_id;
         }
         catch (error) {
+            if (signal.aborted) return;
             Log.error(`Playlist ${lists[0]} (user ${this.id})`, error);
             this.decline(Network.needsCookies(error) ? this.getBlockedText() : `Failed to load: ${lists[0]}`);
         }
@@ -810,16 +938,10 @@ export class User {
 
     /**
      * @param {string} url
+     * @param {AbortSignal} signal
      */
-    async fetchList(url) {
-        var own = this.getCookies();
-        try {
-            return await Network.fetchPlaylist(url);
-        }
-        catch (error) {
-            if (!own || !Network.needsCookies(error)) throw error;
-            return await Network.fetchPlaylist(url, own);
-        }
+    async fetchList(url, signal) {
+        return await this.withCookies(cookies => Network.fetchPlaylist(url, cookies), url, signal);
     }
 
     loadPending() {

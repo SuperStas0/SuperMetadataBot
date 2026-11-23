@@ -14,8 +14,10 @@ export class Files {
         if (missing.length) throw new Error(`static\\config.json is missing: ${missing.join(", ")}`);
     }
 
-    /** @type {{locked?: boolean, shareCookies?: boolean, cleared?: number[], searchConfirm?: "on" | "nonadmin" | "off", largeFiles?: "on" | "confirm" | "off"}} */
-    static settings = this.exists("static", "settings.json") ? this.load("static", "settings.json") : {};
+    /** @type {{access?: "public" | "confirm" | "private", shareCookies?: "on" | "confirm" | "off", searchConfirm?: "on" | "nonadmin" | "off", largeFiles?: "on" | "confirm" | "off", allowed?: number[], cleared?: number[]}} */
+    static settings = this.migrate(this.exists("static", "settings.json") ? this.load("static", "settings.json") : {});
+
+    static defaults = {access: "private", shareCookies: "off", searchConfirm: "off", largeFiles: "off"};
 
     /** @type {string} */
     static startText = Utility.escapeMarkdown(this.read("static", "start.md"));
@@ -63,6 +65,24 @@ export class Files {
      */
     static save(path, data) {
         this.write(path, JSON.stringify(data, null, 0));
+    }
+
+    /**
+     * @param {any} settings
+     */
+    static migrate(settings) {
+        if (settings.locked != null) settings.access ??= settings.locked ? "private" : "public";
+        delete settings.locked;
+        if (typeof settings.shareCookies == "boolean") settings.shareCookies = settings.shareCookies ? "on" : "off";
+        return settings;
+    }
+
+    /**
+     * @param {"access" | "shareCookies" | "searchConfirm" | "largeFiles"} name
+     * @returns {string}
+     */
+    static getSetting(name) {
+        return this.settings[name] ?? this.defaults[name];
     }
 
     static saveSettings() {
@@ -273,22 +293,21 @@ export class Files {
      * @param {string} inputPath
      * @param {string} outputPath
      * @param {[number, number | null][]} parts
+     * @param {AbortSignal} [signal]
      */
-    static async cut(inputPath, outputPath, parts) {
+    static async cut(inputPath, outputPath, parts, signal) {
         if (parts.length == 1) {
             var [start, end] = parts[0];
-            return await new Promise((resolve, reject) => {
-                var command = ffmpeg(inputPath).setStartTime(start);
-                if (end != null) command.setDuration(end - start);
-                command.audioCodec("copy").on("end", resolve).on("error", reject).save(outputPath);
-            })
+            var command = ffmpeg(inputPath).setStartTime(start);
+            if (end != null) command.setDuration(end - start);
+            return await this.runFfmpeg(command.audioCodec("copy"), outputPath, signal);
         }
         var listPath = `${outputPath}.txt`;
         var source = resolvePath(inputPath).replaceAll("\\", "/").replaceAll("'", "'\\''");
         var lines = parts.flatMap(([start, end]) => [`file '${source}'`, `inpoint ${start}`, ...(end == null ? [] : [`outpoint ${end}`])]);
         this.write(listPath, `${lines.join("\n")}\n`);
         try {
-            await new Promise((resolve, reject) => ffmpeg(listPath).inputOptions("-f", "concat", "-safe", "0").audioCodec("copy").on("end", resolve).on("error", reject).save(outputPath));
+            await this.runFfmpeg(ffmpeg(listPath).inputOptions("-f", "concat", "-safe", "0").audioCodec("copy"), outputPath, signal);
         }
         finally {
             this.tryDelete(listPath);
@@ -299,15 +318,31 @@ export class Files {
      * @param {string} inputPath
      * @param {string} outputPath
      * @param {boolean} copy
+     * @param {AbortSignal} [signal]
+     * @param {(fraction: number) => void} [onProgress]
      * @returns {Promise<number>} duration in seconds
      */
-    static async importAudio(inputPath, outputPath, copy) {
-        return await new Promise((resolve, reject) => {
-            var duration = 0;
-            var command = ffmpeg(inputPath).on("codecData", data => { duration = Utility.parseClock(data.duration); }).outputOptions("-map", "0:a:0", "-map_metadata", "-1");
-            if (copy) command.audioCodec("copy");
-            else command.audioCodec("aac").audioBitrate("192k");
-            command.on("end", () => resolve(Math.round(duration))).on("error", reject).save(outputPath);
+    static async importAudio(inputPath, outputPath, copy, signal, onProgress) {
+        var duration = 0;
+        var command = ffmpeg(inputPath).on("codecData", data => { duration = Utility.parseClock(data.duration); }).outputOptions("-map", "0:a:0", "-map_metadata", "-1");
+        if (copy) command.audioCodec("copy");
+        else command.audioCodec("aac").audioBitrate("192k");
+        await this.runFfmpeg(command, outputPath, signal, onProgress);
+        return Math.round(duration);
+    }
+
+    /**
+     * @param {import("fluent-ffmpeg").FfmpegCommand} command
+     * @param {string} outputPath
+     * @param {AbortSignal} [signal]
+     * @param {(fraction: number) => void} [onProgress]
+     */
+    static runFfmpeg(command, outputPath, signal, onProgress) {
+        return new Promise((resolve, reject) => {
+            if (signal?.aborted) return reject(signal.reason);
+            signal?.addEventListener("abort", () => command.kill("SIGKILL"), {once: true});
+            if (onProgress) command.on("progress", progress => onProgress(progress.percent / 100));
+            command.on("end", resolve).on("error", reject).save(outputPath);
         })
     }
 
