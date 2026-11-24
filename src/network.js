@@ -98,7 +98,7 @@ export class Network {
      * @param {any} error
      */
     static needsCookies(error) {
-        return /not a bot|confirm your age|age-restricted|inappropriate|age_verification_required|age_check_required/i.test(error?.message ?? "");
+        return /not a bot|confirm your age|age-restricted|inappropriate|age_verification_required|age_check_required|requested format is not available/i.test(error?.message ?? "");
     }
 
     /**
@@ -124,6 +124,22 @@ export class Network {
      */
     static fetchInfo(url, cookies) {
         return this.withCookies(cookies, copy => this.ytdlp.getInfoAsync(url, {cookies: copy}));
+    }
+
+    /**
+     * @param {string} url
+     * @returns {Promise<string>} the formats yt-dlp sees, for the error log
+     */
+    static async describeFormats(url) {
+        try {
+            var info = await Utility.timeout(this.ytdlp.getInfoAsync(url, {ignoreNoFormatsError: true}), this.infoTimeout, "Reading formats timed out");
+            var formats = info.formats ?? [];
+            var lines = formats.slice(0, 40).map(format => `${format.format_id} ${format.ext} a:${format.acodec} v:${format.vcodec} ${format.filesize ?? format.filesize_approx ?? "?"} ${format.format_note ?? ""}`);
+            return `Formats (${formats.length}), availability ${info.availability}, live ${info.live_status}:\n${lines.join("\n")}`;
+        }
+        catch (error) {
+            return `Formats unavailable: ${error.message}`;
+        }
     }
 
     /**
@@ -178,7 +194,7 @@ export class Network {
     static async downloadMusic(url, path, allowLarge, cookies, onProgress, signal) {
         signal?.throwIfAborted();
         var settings = {
-            format: allowLarge ? "bestaudio/best" : "bestaudio[ext=m4a][filesize<50M]/bestaudio[filesize<50M]/bestaudio[filesize_approx<50M]/worstaudio/worst",
+            format: allowLarge ? "bestaudio/ba*/best" : "bestaudio[ext=m4a][filesize<50M]/bestaudio[filesize<50M]/bestaudio[filesize_approx<50M]/ba*[filesize<50M]/ba*[filesize_approx<50M]/worstaudio/wa*/worst",
             extractAudio: true,
             audioFormat: "m4a",
             output: Files.path(path, allowLarge ? "audio.%(ext)s" : "audio-limited.%(ext)s"),

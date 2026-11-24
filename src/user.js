@@ -276,6 +276,7 @@ export class User {
         }
         catch (error) {
             if (signal.aborted) return false;
+            if (/requested format is not available/i.test(error.message)) error.stack += `\n${await Network.describeFormats(url)}`;
             Log.error(`Load ${url} (user ${this.id})`, error);
             if (Network.needsCookies(error)) this.decline(this.getBlockedText());
             else this.decline(`Failed to load: ${url}`);
