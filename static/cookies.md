@@ -1,11 +1,11 @@
 *Cookies*
 YouTube asks for a login on age restricted videos and when it blocks the server as a bot.
-Send your YouTube cookies to this chat as a `cookies.txt` file in Netscape format.
+Send your YouTube cookies to this chat as a `.txt` file in Netscape format, the file name does not matter.
 
 *How to export*
 1. Open a private browser window and sign in to a secondary YouTube account
 2. In the same tab, open https://www.youtube.com/robots.txt
-3. With a browser extension, export the `youtube.com` cookies in Netscape format as `cookies.txt`
+3. With a browser extension, export the `youtube.com` cookies in Netscape format
 4. Close the private window and do not open that session again, YouTube would rotate the cookies
 5. Send the file to this chat
 

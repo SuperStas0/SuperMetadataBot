@@ -278,7 +278,7 @@ export class User {
             if (signal.aborted) return false;
             if (/requested format is not available/i.test(error.message)) error.stack += `\n${await Network.describeFormats(url)}`;
             Log.error(`Load ${url} (user ${this.id})`, error);
-            if (Network.needsCookies(error)) this.decline(this.getBlockedText());
+            if (Network.needsCookies(error)) this.decline(this.getBlockedText(error));
             else this.decline(`Failed to load: ${url}`);
             return false;
         }
@@ -325,7 +325,7 @@ export class User {
             Log.error(`Search ${query} (user ${this.id})`, error);
             this.clearStatus();
             this.status = previous;
-            this.notify(Network.needsCookies(error) ? this.getBlockedText() : `Search failed: ${query}`);
+            this.notify(Network.needsCookies(error) ? this.getBlockedText(error) : `Search failed: ${query}`);
         }
     }
 
@@ -977,7 +977,7 @@ export class User {
             var buffer = await Network.downloadFile(link, Network.cookiesFileLimit);
             if (!buffer) return this.notify("Failed to download the cookies file");
             var cookies = Utility.parseCookies(buffer.toString("utf8"));
-            if (!cookies) return this.notify("No YouTube cookies found in the file, send cookies.txt in Netscape format");
+            if (!cookies) return this.notify("No YouTube cookies found in the file, send a .txt file in Netscape format");
             var path = this.getCookiesPath();
             Files.write(`${path}.tmp`, cookies, 0o600);
             Files.move(`${path}.tmp`, path);
@@ -1040,7 +1040,7 @@ export class User {
         catch (error) {
             if (signal.aborted) return;
             Log.error(`Playlist ${lists[0]} (user ${this.id})`, error);
-            this.decline(Network.needsCookies(error) ? this.getBlockedText() : `Failed to load: ${lists[0]}`);
+            this.decline(Network.needsCookies(error) ? this.getBlockedText(error) : `Failed to load: ${lists[0]}`);
         }
     }
 
@@ -1067,8 +1067,15 @@ export class User {
         this.pending = null;
     }
 
-    getBlockedText() {
-        return this.hasCookies() ? "YouTube rejected your cookies. Send new cookies, see /cookies" : "YouTube blocked this request. Send your YouTube cookies and try again, see /cookies";
+    /**
+     * @param {any} error
+     */
+    getBlockedText(error) {
+        var problem = Network.cookieProblem(error);
+        if (!this.hasCookies()) return problem == "format" ? "YouTube provided no audio for this video. Sending your YouTube cookies may help, see /cookies" : "YouTube blocked this request. Send your YouTube cookies and try again, see /cookies";
+        if (problem == "format") return "YouTube provided no audio for this video even with your cookies";
+        if (problem == "age") return "YouTube does not allow this video for the account of your cookies";
+        return "YouTube rejected your cookies. Send new cookies, see /cookies";
     }
 
     async getPosterFile() {

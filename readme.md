@@ -35,7 +35,7 @@ Errors are written to `logs\error.log`. The admin can view the last one in the a
 # Cookies
 Some videos need a YouTube login: age restricted ones, and any video when YouTube blocks the server as a bot. Cookies are used only for such videos and only the cookies of the user who sent the request.
 
-1. Export your YouTube cookies in Netscape format as `cookies.txt`. Open a private window, sign in to a secondary account, open `https://www.youtube.com/robots.txt` in the same tab, export the `youtube.com` cookies, then close the window.
+1. Export your YouTube cookies in Netscape format as a `.txt` file, the name does not matter. Open a private window, sign in to a secondary account, open `https://www.youtube.com/robots.txt` in the same tab, export the `youtube.com` cookies, then close the window.
 2. Send the file to the bot. Only YouTube and Google cookies are kept.
 3. Send `/removecookies` to delete them.
 

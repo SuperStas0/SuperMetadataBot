@@ -98,7 +98,19 @@ export class Network {
      * @param {any} error
      */
     static needsCookies(error) {
-        return /not a bot|confirm your age|age-restricted|inappropriate|age_verification_required|age_check_required|requested format is not available/i.test(error?.message ?? "");
+        return this.cookieProblem(error) != null;
+    }
+
+    /**
+     * @param {any} error
+     * @returns {"format" | "age" | "bot" | null} what YouTube complains about when cookies could help
+     */
+    static cookieProblem(error) {
+        var message = error?.message ?? "";
+        if (/requested format is not available/i.test(message)) return "format";
+        if (/confirm your age|age-restricted|inappropriate|age_verification_required|age_check_required/i.test(message)) return "age";
+        if (/not a bot/i.test(message)) return "bot";
+        return null;
     }
 
     /**
@@ -132,10 +144,13 @@ export class Network {
      */
     static async describeFormats(url) {
         try {
-            var info = await Utility.timeout(this.ytdlp.getInfoAsync(url, {ignoreNoFormatsError: true}), this.infoTimeout, "Reading formats timed out");
+            var version = await this.ytdlp.getVersionAsync();
+            var result = await Utility.timeout(this.ytdlp.exec(url, {dumpSingleJson: true, ignoreNoFormatsError: true}).run(), this.infoTimeout, "Reading formats timed out");
+            var info = JSON.parse(result.output);
             var formats = info.formats ?? [];
             var lines = formats.slice(0, 40).map(format => `${format.format_id} ${format.ext} a:${format.acodec} v:${format.vcodec} ${format.filesize ?? format.filesize_approx ?? "?"} ${format.format_note ?? ""}`);
-            return `Formats (${formats.length}), availability ${info.availability}, live ${info.live_status}:\n${lines.join("\n")}`;
+            var warnings = result.stderr.split(/\r?\n/).filter(line => /^(WARNING|ERROR)/.test(line)).slice(-8);
+            return `yt-dlp ${version}, formats (${formats.length}), availability ${info.availability}, live ${info.live_status}:\n${[...lines, ...warnings].join("\n")}`;
         }
         catch (error) {
             return `Formats unavailable: ${error.message}`;
