@@ -41,6 +41,15 @@ Some videos need a YouTube login: age restricted ones, and any video when YouTub
 
 The admin can let users without cookies use the admin cookies, always or after a confirmation, in the Settings of the admin panel (`/admin`). It is off by default, the state is saved to `static\settings.json`.
 
+# Proxy
+Some videos are blocked in the country of the server. Add a `proxy` key to `static\config.json` and the bot retries a blocked video through it, for the info and the download. Videos that load directly never use the proxy.
+
+```
+"proxy": "socks5h://127.0.0.1:1080"
+```
+
+Accepted schemes: `http`, `https`, `socks4`, `socks5`, `socks5h`. Setup (`-s`) rewrites `static\config.json`, the old file is kept as `static\config.json.bak`.
+
 # Building
 Requirements:
 - Node.js 22 or newer (installed automatically if missing)
