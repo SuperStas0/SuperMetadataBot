@@ -24,6 +24,18 @@ export class Panel {
 
     static counter = 0;
 
+    static pageSize = 8;
+
+    static sources = {youtube: "YouTube audio", telegram: "Uploaded audio"};
+
+    static listCounter = 0;
+
+    /** @type {{id: string, path: string, title: string, size: number, time: number, key: number}[]} audios shown in the last opened list */
+    static items = [];
+
+    /** @type {{source: "youtube" | "telegram", page: number}} */
+    static listed = {source: "youtube", page: 0};
+
     /** @type {Record<number, {resolve: (result: string) => void, timer: NodeJS.Timeout, message: number, text: string}>} */
     static requests = {};
 
@@ -54,6 +66,39 @@ export class Panel {
 
     static storage() {
         return {text: Utility.getStorageText(Files.getStorage(), Files.getFreeSpace(), App.cacheSize), markup: Menus.GenerateMarkup(["Refresh", "panel:storage", 0], ["Back", "panel:main", 1])};
+    }
+
+    static deleteMenu() {
+        return {text: "Delete audio", markup: Menus.GenerateMarkup(["Last loaded", "panel:last", 0], ["YouTube audio", "panel:youtube", 1], ["Uploaded audio", "panel:telegram", 1], ["Back", "panel:main", 2])};
+    }
+
+    /**
+     * @param {"youtube" | "telegram"} source
+     * @param {number} page
+     */
+    static audioList(source, page) {
+        this.items = Files.listAudios(source).map(item => ({...item, key: ++this.listCounter}));
+        var pages = Math.max(1, Math.ceil(this.items.length / this.pageSize));
+        page = Math.min(page, pages - 1);
+        this.listed = {source: source, page: page};
+        var from = page * this.pageSize;
+        var shown = this.items.slice(from, from + this.pageSize);
+        var total = this.items.reduce((sum, item) => sum + item.size, 0);
+        var lines = [`${this.sources[source]}: \`${this.items.length} stored, ${Utility.getSizeString(total)}\``];
+        shown.forEach((item, index) => {
+            var title = Utility.escapeCode(item.title.replace(/\s+/g, " ").slice(0, 40)) || item.id;
+            lines.push(`${from + index + 1}\\. \`${title}\` \`${Utility.getSizeString(item.size)}, ${new Date(item.time).toISOString().slice(0, 10)}\``);
+        });
+        if (pages > 1) lines.push(`Page ${page + 1}/${pages}`);
+        lines.push(shown.length ? "Select a number to delete that audio" : "No audio in storage");
+        var buttons = shown.map((item, index) => [`${from + index + 1}`, `panel:remove:${item.key}`, Math.floor(index / 4), "danger"]);
+        var row = Math.ceil(shown.length / 4);
+        var start = buttons.length;
+        if (page > 0) buttons.push(["Previous", `panel:${source}:${page - 1}`, row]);
+        if (page < pages - 1) buttons.push(["Next", `panel:${source}:${page + 1}`, row]);
+        if (buttons.length > start) row++;
+        buttons.push(["Back", "panel:delete", row]);
+        return {text: lines.join("\n"), markup: Menus.GenerateMarkup(...buttons)};
     }
 
     static error() {
@@ -131,27 +176,56 @@ export class Panel {
             ctx.deleteMessage().catch(() => {});
             return;
         }
-        if (name == "delete") return this.deleteAudio(ctx, user);
+        if (name == "last") return this.deleteLast(ctx, user);
+        if (name == "remove") return this.removeAudio(ctx, page);
         if (Object.hasOwn(this.options, name)) {
             var error = this.toggle(name, user);
             if (error) return ctx.answerCbQuery(error, {show_alert: true}).catch(() => {});
             name = "settings";
         }
         ctx.answerCbQuery().catch(() => {});
-        var view = name == "log" ? this.log(page) : name == "storage" ? this.storage() : name == "error" ? this.error() : name == "settings" ? this.settings() : this.main();
+        var view = name == "log" ? this.log(page) : name == "storage" ? this.storage() : name == "error" ? this.error() : name == "settings" ? this.settings() : name == "delete" ? this.deleteMenu() : Object.hasOwn(this.sources, name) ? this.audioList(name, page) : this.main();
         await this.show(ctx, view);
     }
 
     /**
+     * Deletes the audios of the last load of the admin, the whole batch if there are several
      * @param {Context} ctx
      * @param {import("./user.js").User} user
      */
-    static deleteAudio(ctx, user) {
-        if (user.status != "default" || user.mode != "youtube") return ctx.answerCbQuery("Load a YouTube audio first", {show_alert: true}).catch(() => {});
-        Files.delete(user.getSourcePath());
+    static deleteLast(ctx, user) {
+        var paths = user.status == "default" ? [...new Set(user.getAudios().map(audio => audio.source.path).filter(Boolean))] : [];
+        if (!paths.length) return ctx.answerCbQuery("Load an audio first", {show_alert: true}).catch(() => {});
+        try {
+            paths.forEach(path => Files.deleteAudio(path));
+        }
+        catch (error) {
+            Log.error("Delete last audio", error);
+            return ctx.answerCbQuery("Failed to delete", {show_alert: true}).catch(() => {});
+        }
         user.removeMenu();
         user.status = "none";
-        ctx.answerCbQuery("Audio deleted from the server").catch(() => {});
+        ctx.answerCbQuery(paths.length > 1 ? `${paths.length} audios deleted from the server` : "Audio deleted from the server").catch(() => {});
+    }
+
+    /**
+     * @param {Context} ctx
+     * @param {number} key of the audio in the opened list
+     */
+    static async removeAudio(ctx, key) {
+        var item = this.items.find(item => item.key == key);
+        if (!item) return ctx.answerCbQuery("The list changed, open it again", {show_alert: true}).catch(() => {});
+        if (Object.values(App.data).some(user => user.status == "loading")) return ctx.answerCbQuery("Audio is being loaded, try again later", {show_alert: true}).catch(() => {});
+        var text = `Deleted: ${item.title}`.slice(0, 200);
+        try {
+            Files.deleteAudio(item.path);
+        }
+        catch (error) {
+            Log.error("Delete audio", error);
+            text = "Failed to delete";
+        }
+        ctx.answerCbQuery(text).catch(() => {});
+        await this.show(ctx, this.audioList(this.listed.source, this.listed.page));
     }
 
     /**

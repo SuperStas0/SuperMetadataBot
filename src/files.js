@@ -303,6 +303,40 @@ export class Files {
     }
 
     /**
+     * @param {"youtube" | "telegram"} source
+     * @returns {{id: string, path: string, title: string, size: number, time: number}[]} folders with audio files, newest first
+     */
+    static listAudios(source) {
+        var audios = [];
+        for (var id of this.list(this.path("downloads", source))) {
+            var path = this.path("downloads", source, id);
+            try {
+                var stats = this.list(path).filter(name => /^audio(-limited)?\.m4a$/.test(name)).map(name => fs.statSync(this.path(path, name)));
+                if (!stats.length) continue;
+                var title = null;
+                try {
+                    title = this.load(path, "data.json").title;
+                }
+                catch {}
+                audios.push({id: id, path: path, title: title ? String(title) : id, size: stats.reduce((sum, item) => sum + item.size, 0), time: Math.max(...stats.map(item => item.mtimeMs))});
+            }
+            catch (error) {
+                if (error.code != "ENOENT") Log.error(`List audio ${path}`, error);
+            }
+        }
+        return audios.sort((first, second) => second.time - first.time);
+    }
+
+    /**
+     * Deletes the folder of one cached audio, any other path is refused
+     * @param {string} path
+     */
+    static deleteAudio(path) {
+        if (!/^downloads[\\/](youtube|telegram)[\\/][\w-]+$/.test(path)) throw new Error(`Not an audio folder: ${path}`);
+        this.delete(path);
+    }
+
+    /**
      * @param {string} inputPath
      * @param {string} outputPath
      * @param {[number, number | null][]} parts

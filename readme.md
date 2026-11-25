@@ -33,6 +33,8 @@ Then you can:
 
 Errors are written to `logs\error.log`. The admin can view the last one in the admin panel (`/admin`).
 
+In Delete audio of the admin panel (`/admin`) the admin can delete the audio of their last load, or any stored YouTube or uploaded audio from a list. A deleted audio is downloaded again when someone loads it.
+
 # Cookies
 Some videos need a YouTube login: age restricted ones, and any video when YouTube blocks the server as a bot. Cookies are used only for such videos and only the cookies of the user who sent the request.
 
