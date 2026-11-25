@@ -378,7 +378,7 @@ export class Files {
     }
 
     /**
-     * Removes black edges equally from both sides, fits the whole image into a square with black fields and resizes it to the Telegram thumbnail limits
+     * Removes black edges equally from both sides, scales the image to fill a square from the center and resizes it to the Telegram thumbnail limits
      * @param {string} inputPath
      * @param {string} outputPath
      */
@@ -386,7 +386,7 @@ export class Files {
         var temp = outputPath.replace(/\.jpg$/, ".tmp.jpg");
         var margins = await this.detectBlackMargins(inputPath);
         var size = this.posterSize;
-        var filters = [`scale=${size}:${size}:force_original_aspect_ratio=decrease`, `pad=${size}:${size}:(ow-iw)/2:(oh-ih)/2:black`, "setsar=1", "format=yuvj420p"];
+        var filters = [`scale=${size}:${size}:force_original_aspect_ratio=increase`, `crop=${size}:${size}`, "setsar=1", "format=yuvj420p"];
         if (margins) filters.unshift(`crop=iw-${margins[0] * 2}:ih-${margins[1] * 2}:${margins[0]}:${margins[1]}`);
         try {
             for (var quality of [3, 8, 15]) {
