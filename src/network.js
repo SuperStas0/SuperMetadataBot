@@ -238,9 +238,10 @@ export class Network {
     static async downloadMusic(url, path, allowLarge, cookies, onProgress, signal) {
         signal?.throwIfAborted();
         var settings = {
-            format: allowLarge ? "bestaudio/ba*/best" : "bestaudio[ext=m4a][filesize<50M]/bestaudio[filesize<50M]/bestaudio[filesize_approx<50M]/ba*[filesize<50M]/ba*[filesize_approx<50M]/worstaudio/wa*/worst",
+            format: allowLarge ? "bestaudio[ext=m4a]/bestaudio/ba*/best" : "bestaudio[ext=m4a][filesize<50M]/bestaudio[filesize<50M]/bestaudio[filesize_approx<50M]/ba*[filesize<50M]/ba*[filesize_approx<50M]/worstaudio/wa*/worst",
             extractAudio: true,
             audioFormat: "m4a",
+            audioQuality: "128K",
             output: Files.path(path, allowLarge ? "audio.%(ext)s" : "audio-limited.%(ext)s"),
             noPlaylist: true
         }
