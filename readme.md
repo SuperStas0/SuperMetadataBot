@@ -27,7 +27,7 @@ Then you can:
 - Change the order of a batch
 - Change performer
 - Change poster: send a photo or a YouTube link, audio files keep their embedded cover or Telegram thumbnail
-- Format the poster: remove black edges equally from both sides, scale the image to fill a 320x320 square from the center
+- Format the poster: remove black edges equally from both sides, cut a square from the center, scaled down to 320x320 at most, smaller images are not enlarged or padded
 - Unbatch: set performer and poster for one audio of a batch instead of the whole batch
 - Change duration
 
