@@ -11,7 +11,7 @@ export class Panel {
         cookies: {title: "Cookie sharing", key: "shareCookies", modes: ["on", "confirm", "off"], names: {on: "on", confirm: "confirmation", off: "off"}},
         search: {title: "Search confirmation", key: "searchConfirm", modes: ["on", "nonadmin", "off"], names: {on: "on", nonadmin: "non-admin only", off: "off"}},
         large: {title: "Large files", key: "largeFiles", modes: ["on", "confirm", "off"], names: {on: "on", confirm: "confirmation", off: "off"}},
-        cache: {title: "Cache size", key: "cacheSize", modes: ["scarce", "default", "ultimate", "disabled"], names: {scarce: "scarce, 2 GB", default: "default, 5 GB", ultimate: "ultimate, 50 GB", disabled: "disabled, no limit"}}
+        cache: {title: "Cache size", key: "cacheSize", modes: ["scarce", "default", "ultimate", "disabled"], names: {scarce: "scarce, 2 GB, 1 day", default: "default, 5 GB, 7 days", ultimate: "ultimate, 50 GB, 30 days", disabled: "disabled, no limits"}}
     };
 
     static styles = {public: "success", on: "success", confirm: "primary", nonadmin: "primary", private: "danger", off: "danger", scarce: "danger", default: "primary", ultimate: "success", disabled: "success"};
@@ -73,7 +73,7 @@ export class Panel {
     }
 
     static storage() {
-        return {text: Utility.getStorageText(Files.getStorage(), Files.getFreeSpace(), App.getCacheSize()), markup: Menus.GenerateMarkup(["Refresh", "panel:storage", 0], ["Back", "panel:main", 1])};
+        return {text: Utility.getStorageText(Files.getStorage(), Files.getFreeSpace(), App.getCache().size), markup: Menus.GenerateMarkup(["Refresh", "panel:storage", 0], ["Back", "panel:main", 1])};
     }
 
     static deleteMenu() {
@@ -149,7 +149,10 @@ export class Panel {
         if (name == "cookies" && next != "off" && !user.hasCookies()) return "Send your YouTube cookies first, see /cookies";
         Files.settings[option.key] = next;
         Files.saveSettings();
-        if (name == "cache") App.clean();
+        if (name == "cache") {
+            App.schedule();
+            App.clean();
+        }
         return null;
     }
 

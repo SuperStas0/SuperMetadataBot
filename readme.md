@@ -35,7 +35,16 @@ Errors are written to `logs\error.log`. The admin can view the last one in the a
 
 In Delete audio of the admin panel (`/admin`) the admin can delete the audio of their last load, or any stored YouTube or uploaded audio from a list. While a list is open, a text message filters it by title or performer instead of searching YouTube, Clear filter shows the whole list again. A deleted audio is downloaded again when someone loads it.
 
-In the Settings of the admin panel (`/admin`) the admin picks the cache size, the limit for stored audio: scarce 2 GB, default 5 GB, ultimate 50 GB, disabled for no size limit. The oldest audio is deleted first, audio older than 7 days is deleted at any size. When the free disk space drops below 1 GB, the oldest audio is deleted until it is free again. The state is saved to `static\settings.json`.
+In the Settings of the admin panel (`/admin`) the admin picks the cache size, a preset for how much and for how long audio is stored. The oldest audio is deleted first. The age counts from the last use. Changing the preset cleans the cache right away. The state is saved to `static\settings.json`.
+
+| Preset | Size limit | Audio and user posters kept | Info of deleted audio kept | Cleanup |
+| --- | --- | --- | --- | --- |
+| scarce | 2 GB | 1 day | 7 days | every hour |
+| default | 5 GB | 7 days | 30 days | every 24 hours |
+| ultimate | 50 GB | 30 days | 180 days | every 24 hours |
+| disabled | none | forever | forever | every 24 hours |
+
+In every preset, when the free disk space drops below 1 GB, the oldest audio is deleted until it is free again.
 
 # Cookies
 Some videos need a YouTube login: age restricted ones, and any video when YouTube blocks the server as a bot. Cookies are used only for such videos and only the cookies of the user who sent the request.

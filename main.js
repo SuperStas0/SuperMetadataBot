@@ -18,14 +18,23 @@ export class App {
 
     static largeFiles = {};
 
-    static cacheAge = 7 * 24 * 60 * 60 * 1000;
+    static cachePresets = {
+        scarce: {size: 2 * 1024 * 1024 * 1024, age: 24 * 60 * 60 * 1000, folderAge: 7 * 24 * 60 * 60 * 1000, interval: 60 * 60 * 1000},
+        default: {size: 5 * 1024 * 1024 * 1024, age: 7 * 24 * 60 * 60 * 1000, folderAge: 30 * 24 * 60 * 60 * 1000, interval: 24 * 60 * 60 * 1000},
+        ultimate: {size: 50 * 1024 * 1024 * 1024, age: 30 * 24 * 60 * 60 * 1000, folderAge: 180 * 24 * 60 * 60 * 1000, interval: 24 * 60 * 60 * 1000},
+        disabled: {size: Infinity, age: Infinity, folderAge: Infinity, interval: 24 * 60 * 60 * 1000}
+    };
 
-    static cacheFolderAge = 30 * 24 * 60 * 60 * 1000;
+    /** @type {NodeJS.Timeout | null} */
+    static cleaner = null;
 
-    static cacheSizes = {scarce: 2 * 1024 * 1024 * 1024, default: 5 * 1024 * 1024 * 1024, ultimate: 50 * 1024 * 1024 * 1024, disabled: Infinity};
+    static getCache() {
+        return this.cachePresets[Files.getSetting("cacheSize")] ?? this.cachePresets.default;
+    }
 
-    static getCacheSize() {
-        return this.cacheSizes[Files.getSetting("cacheSize")] ?? this.cacheSizes.default;
+    static schedule() {
+        clearInterval(this.cleaner);
+        this.cleaner = setInterval(() => this.clean(), this.getCache().interval);
     }
 
     /** @type {Set<number>} */
@@ -74,7 +83,8 @@ export class App {
     static clean(force) {
         try {
             if (!force && Object.values(this.data).some(user => user.status == "loading")) return;
-            Files.cleanCache(this.cacheAge, this.cacheFolderAge, this.getCacheSize(), force ? Network.minFreeSpace : 0);
+            var cache = this.getCache();
+            Files.cleanCache(cache.age, cache.folderAge, cache.size, force ? Network.minFreeSpace : 0);
         }
         catch (error) {
             Log.error("Clean cache", error);
@@ -91,7 +101,7 @@ export class App {
 
         Files.cleanTemp();
         this.clean();
-        var cleaner = setInterval(() => this.clean(), 24 * 60 * 60 * 1000);
+        this.schedule();
 
         process.once("SIGINT", () => this.stop("SIGINT"));
         process.once("SIGTERM", () => this.stop("SIGTERM"));
@@ -395,7 +405,7 @@ export class App {
             console.log("\n\nStarted!\n");
             this.app.telegram.sendMessage(Files.config.admin, "Started", {disable_notification: true});
         });
-        clearInterval(cleaner);
+        clearInterval(this.cleaner);
     }
 
     /**
