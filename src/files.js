@@ -349,7 +349,11 @@ export class Files {
         return new Promise((resolve, reject) => {
             if (signal?.aborted) return reject(signal.reason);
             signal?.addEventListener("abort", () => command.kill("SIGKILL"), {once: true});
-            if (onProgress) command.on("progress", progress => onProgress(progress.percent / 100));
+            if (onProgress) {
+                var total = 0;
+                command.on("codecData", data => { total = Utility.parseClock(data.duration); });
+                command.on("progress", progress => total && onProgress(Utility.parseClock(progress.timemark) / total));
+            }
             command.on("end", resolve).on("error", reject).save(outputPath);
         })
     }

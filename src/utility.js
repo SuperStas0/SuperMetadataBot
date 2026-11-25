@@ -98,9 +98,11 @@ export class Utility {
      * @param {number} duration
      */
     static getDurationString(duration) {
-        var mins = Math.floor(duration / 60);
+        var hours = Math.floor(duration / 3600);
+        var mins = Math.floor(duration % 3600 / 60);
         var secs = Math.floor(duration % 60);
-        return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+        var time = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+        return hours ? `${hours}:${time}` : time;
     }
 
     /**
@@ -210,6 +212,15 @@ export class Utility {
             if (/^(.+\.)?(youtube|google)\.com$/.test(fields[0].replace(/^\./, "").toLowerCase())) lines.push(line);
         }
         return lines.length ? `# Netscape HTTP Cookie File\n${lines.join("\n")}\n` : null;
+    }
+
+    /**
+     * @param {string} cookies result of parseCookies
+     * @returns {boolean} true if the YouTube sign-in cookies are present
+     */
+    static hasLogin(cookies) {
+        var names = new Set(cookies.split("\n").map(line => line.replace(/^#HttpOnly_/, "").split("\t")).filter(fields => fields.length == 7 && /^(.+\.)?youtube\.com$/.test(fields[0].replace(/^\./, "").toLowerCase())).map(fields => fields[5]));
+        return names.has("LOGIN_INFO") && ["SAPISID", "__Secure-1PAPISID", "__Secure-3PAPISID"].some(name => names.has(name));
     }
 
     /**

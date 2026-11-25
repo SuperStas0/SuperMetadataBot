@@ -7,7 +7,7 @@ Telegram bot to download audio from YouTube and edit its metadata.
 2. Run `build.bat` (Windows) or `bash build.sh` (Linux, macOS). It installs Node.js 22 or newer if missing, installs the dependencies and starts the setup.
 3. Follow the setup instructions: create the bot with [@BotFather](https://t.me/BotFather), get an api_id and api_hash on [my.telegram.org](https://my.telegram.org), log in your Telegram account. The account becomes the bot admin.
 
-The settings are saved to `static\config.json`. The admin sets who can use the bot in the Settings of the admin panel (`/admin`): public, confirmation of each new user, or private. The bot is private by default, the state is saved to `static\settings.json`. Run the build with `-s` to set them up again.
+The settings are saved to `static\config.json`. The admin sets who can use the bot in the Settings of the admin panel (`/admin`): public, confirmation of each new user, or private. The bot is private by default, the state is saved to `static\settings.json`. With confirmation, the message that asked for access (a link, a search, a file) runs after the admin allows it. Run the build with `-s` to set them up again.
 
 # Usage
 Public instance: [@supermetadatabot](https://t.me/supermetadatabot). Hosting your own is recommended.
@@ -36,7 +36,7 @@ Errors are written to `logs\error.log`. The admin can view the last one in the a
 Some videos need a YouTube login: age restricted ones, and any video when YouTube blocks the server as a bot. Cookies are used only for such videos and only the cookies of the user who sent the request.
 
 1. Export your YouTube cookies in Netscape format as a `.txt` file, the name does not matter. Open a private window, sign in to a secondary account, open `https://www.youtube.com/robots.txt` in the same tab, export the `youtube.com` cookies, then close the window.
-2. Send the file to the bot. Only YouTube and Google cookies are kept.
+2. Send the file to the bot. Only YouTube and Google cookies are kept. The bot checks them with YouTube and saves them only if they work.
 3. Send `/removecookies` to delete them.
 
 The admin can let users without cookies use the admin cookies, always or after a confirmation, in the Settings of the admin panel (`/admin`). It is off by default, the state is saved to `static\settings.json`.
@@ -58,5 +58,5 @@ Setup also runs when `static\config.json` is missing, unless `-r` is given. `bui
 
 Build output: `node_modules`
 
-# License
+# Credit
 - [MIT](LICENSE.md)

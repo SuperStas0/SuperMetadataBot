@@ -157,7 +157,16 @@ export class User {
 
     scanSilences() {
         var current = this.getAudio();
-        [current, ...this.getAudios().filter(audio => audio != current)].forEach(audio => audio.source.path && this.loadSilences(audio.source));
+        [current, ...this.getAudios().filter(audio => audio != current)].forEach(audio => audio.source.path && this.scanAudio(audio));
+    }
+
+    /**
+     * @param {Audio} audio
+     */
+    async scanAudio(audio) {
+        var had = this.getSuggestions(audio).length > 0;
+        await this.loadSilences(audio.source);
+        if (!had && this.status == "default" && this.menu && this.getAudio() == audio && this.getSuggestions().length) this.sendMenu("default");
     }
 
     restoreMenu() {
@@ -169,14 +178,22 @@ export class User {
     /**
      * @param {string} text
      * @param {AbortSignal} signal
-     * @returns {(fraction: number) => void} shows the percent under the text, at most every 5% and 1.5 seconds
+     * @param {string} [doneText] shown once instead of the percent when the work reaches 100%
+     * @returns {(fraction: number) => void} shows the percent under the text, at most every 1.5 seconds
      */
-    progress(text, signal) {
-        var shown = -5;
+    progress(text, signal, doneText) {
+        var shown = -1;
         var time = 0;
+        var done = false;
         return fraction => {
+            if (signal.aborted || done) return;
+            if (fraction >= 1) {
+                done = true;
+                if (doneText) this.updateStatus(doneText);
+                return;
+            }
             var percent = Math.floor(fraction * 100);
-            if (signal.aborted || !(percent >= shown + 5 && percent < 100) || Date.now() - time < 1500) return;
+            if (!(percent > shown) || Date.now() - time < 1500) return;
             shown = percent;
             time = Date.now();
             this.updateStatus(`${text}\n${percent}%`);
@@ -239,7 +256,7 @@ export class User {
                 file = large || Files.exists(best) && Files.getFileSize(best) < Network.botFileLimit ? "audio.m4a" : "audio-limited.m4a";
                 if (!Files.exists(Files.path(path, file))) {
                     this.updateStatus(`Downloading: ${url}`);
-                    tasks.push(Utility.queue("download", Network.maxDownloads, () => Utility.timeout(run(used => Network.downloadMusic(url, path, large, used, this.progress(`Downloading: ${url}`, signal), signal)), Network.downloadTimeout, "Downloading timed out")).then(() => {
+                    tasks.push(Utility.queue("download", Network.maxDownloads, () => Utility.timeout(run(used => Network.downloadMusic(url, path, large, used, this.progress(`Downloading: ${url}`, signal, `Converting: ${url}`), signal)), Network.downloadTimeout, "Downloading timed out")).then(() => {
                         if (!signal.aborted) this.updateStatus(`Fetching: ${url}`);
                     }));
                 }
@@ -276,10 +293,13 @@ export class User {
         }
         catch (error) {
             if (signal.aborted) return false;
-            if (/requested format is not available/i.test(error.message)) error.stack += `\n${await Network.describeFormats(url)}`;
-            Log.error(`Load ${url} (user ${this.id})`, error);
+            var reason = Network.needsCookies(error) ? null : Network.unavailableReason(error);
+            if (!reason) {
+                if (/requested format is not available/i.test(error.message)) error.stack += `\n${await Network.describeFormats(url)}`;
+                Log.error(`Load ${url} (user ${this.id})`, error);
+            }
             if (Network.needsCookies(error)) this.decline(this.getBlockedText(error));
-            else this.decline(`Failed to load: ${url}`);
+            else this.decline(reason ? `Failed to load: ${url}\n${reason}` : `Failed to load: ${url}`);
             return false;
         }
         return true;
@@ -801,8 +821,10 @@ export class User {
         }
     }
 
-    getSuggestions() {
-        var audio = this.getAudio();
+    /**
+     * @param {Audio} [audio]
+     */
+    getSuggestions(audio = this.getAudio()) {
         var silences = (audio.source.silences ?? []).toSorted((first, second) => second.end - second.start - (first.end - first.start));
         return [...(audio.source.segments ?? []), ...silences].filter(segment => !audio.cuts.some(([start, end]) => start <= segment.start && end >= segment.end)).slice(0, User.maxSuggestions).sort((first, second) => first.start - second.start);
     }
@@ -972,21 +994,39 @@ export class User {
      */
     async setCookies(document) {
         if (document.file_size > Network.cookiesFileLimit) return this.notify("Cookies file is too big");
+        var path = this.getCookiesPath();
+        var temp = `${path}.tmp`;
+        var checking = null;
+        var text = "Failed to save cookies";
         try {
             var link = await App.app.telegram.getFileLink(document.file_id);
             var buffer = await Network.downloadFile(link, Network.cookiesFileLimit);
             if (!buffer) return this.notify("Failed to download the cookies file");
             var cookies = Utility.parseCookies(buffer.toString("utf8"));
             if (!cookies) return this.notify("No YouTube cookies found in the file, send a .txt file in Netscape format");
-            var path = this.getCookiesPath();
-            Files.write(`${path}.tmp`, cookies, 0o600);
-            Files.move(`${path}.tmp`, path);
-            this.notify("Cookies saved");
+            if (!Utility.hasLogin(cookies)) return this.notify("The cookies are not signed in to YouTube, sign in and export them again, see /cookies");
+            checking = await this.notify("Checking cookies");
+            await Utility.lock(temp, async () => {
+                try {
+                    Files.write(temp, cookies, 0o600);
+                    var result = await Utility.timeout(Network.checkCookies(temp), Network.infoTimeout, "Checking cookies timed out").catch(error => {
+                        Log.error(`Check cookies (user ${this.id})`, error);
+                        throw User.expected("Failed to check the cookies, try again later");
+                    })
+                    if (result == "valid") Files.move(temp, path);
+                    text = {valid: "Cookies saved", rotated: "YouTube signed these cookies out, they were rotated. Export them again as described in /cookies", rejected: "YouTube rejected these cookies. Send new cookies, see /cookies"}[result];
+                }
+                finally {
+                    Files.tryDelete(temp);
+                }
+            })
         }
         catch (error) {
-            Log.error(`Save cookies (user ${this.id})`, error);
-            this.notify("Failed to save cookies");
+            if (!error.user) Log.error(`Save cookies (user ${this.id})`, error);
+            text = error.user ? error.message : "Failed to save cookies";
         }
+        if (checking) App.app.telegram.editMessageText(this.id, checking.message_id, null, text).catch(() => this.notify(text));
+        else this.notify(text);
     }
 
     removeCookies() {
@@ -1148,6 +1188,7 @@ export class User {
         info.text += `Duration: \`${Utility.getDurationString(info.duration)}\`\n`;
         info.text += info.poster ? `Poster: ${{"default": audio.source.uploaded ? "Original" : "Youtube", "custom": "Custom"}[info.poster]}${audio.posterFormatted ? ", formatted" : ""}` : "No poster";
         if (info.cuts.length) info.text += `\nCuts: ${info.cuts.length}, new duration \`${Utility.getDurationString(Utility.getDuration(info.duration, info.cuts))}\``;
+        if (this.getSuggestions().length) info.text += "\n*Suggested segments found\\! See __Cuts__*";
 
         return info;
 

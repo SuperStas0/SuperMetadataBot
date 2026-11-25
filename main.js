@@ -96,7 +96,7 @@ export class App {
             if (!this.hasAccess(ctx.from?.id)) {
                 var confirm = Files.getSetting("access") == "confirm";
                 if (ctx.callbackQuery) ctx.answerCbQuery(confirm ? "Access is not allowed yet" : "This bot is private").catch(() => {});
-                else if (ctx.chat?.type == "private") ctx.reply(confirm ? Panel.requestAccess(ctx.from.id, User.getName(ctx)) : "This bot is private").catch(() => {});
+                else if (ctx.chat?.type == "private") ctx.reply(confirm ? Panel.requestAccess(ctx.from.id, User.getName(ctx), ctx.message ? ctx.update : null) : "This bot is private").catch(() => {});
                 return;
             }
             if (ctx.chat?.type == "private") {

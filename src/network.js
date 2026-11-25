@@ -28,6 +28,8 @@ export class Network {
 
     static cookiesFileLimit = 2 * 1024 * 1024;
 
+    static cookieCheckId = "jNQXAC9IbQ0";
+
     static largeQueue = Promise.resolve();
 
     static maxDuration = 4 * 60 * 60;
@@ -114,6 +116,15 @@ export class Network {
     }
 
     /**
+     * @param {any} error
+     * @returns {string | null} the reason YouTube gives when the video itself cannot be loaded
+     */
+    static unavailableReason(error) {
+        var message = (error?.message ?? "").replace(/^yt-dlp exited with code \d+:\s*/, "").replace(/^[A-Za-z0-9_-]{11}:\s*/, "").trim();
+        return /^(video unavailable|private video|this video (is|has been|was)|the uploader has not made this video available|this live event)/i.test(message) ? message.split("\n")[0] : null;
+    }
+
+    /**
      * @param {string | null} source
      * @param {(cookies?: string) => Promise<any>} task
      */
@@ -136,6 +147,24 @@ export class Network {
      */
     static fetchInfo(url, cookies) {
         return this.withCookies(cookies, copy => this.ytdlp.getInfoAsync(url, {cookies: copy}));
+    }
+
+    /**
+     * @param {string} source cookies file to check
+     * @returns {Promise<"valid" | "rotated" | "rejected">} rotated: YouTube signed the account out, rejected: YouTube still blocks the request
+     */
+    static async checkCookies(source) {
+        return await this.withCookies(source, async copy => {
+            try {
+                var result = await this.ytdlp.exec(`https://www.youtube.com/watch?v=${this.cookieCheckId}`, {dumpSingleJson: true, noPlaylist: true, ignoreNoFormatsError: true, cookies: copy}).run();
+            }
+            catch (error) {
+                if (this.needsCookies(error)) return "rejected";
+                throw error;
+            }
+            if (JSON.parse(result.output).id != this.cookieCheckId) throw new Error("Cookie check returned no video info");
+            return /cookies are no longer valid/i.test(result.stderr) ? "rotated" : "valid";
+        });
     }
 
     /**
@@ -219,7 +248,7 @@ export class Network {
             var warnings = [];
             var download = this.ytdlp.download(url, {...settings, cookies: copy});
             download.on("stderr", text => warnings.push(...text.split(/\r?\n/).filter(line => /^(WARNING|ERROR)/.test(line))));
-            if (onProgress) download.on("progress", progress => onProgress(progress.percentage != null ? progress.percentage / 100 : progress.total ? progress.downloaded / progress.total : NaN));
+            if (onProgress) download.on("progress", progress => onProgress(progress.status == "finished" ? 1 : progress.total ? progress.downloaded / progress.total : NaN));
             signal?.addEventListener("abort", () => download.kill(), {once: true});
             try {
                 return await download.run();

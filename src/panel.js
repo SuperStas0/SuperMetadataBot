@@ -27,8 +27,10 @@ export class Panel {
     /** @type {Record<number, {resolve: (result: string) => void, timer: NodeJS.Timeout, message: number, text: string}>} */
     static requests = {};
 
-    /** @type {Set<number>} */
-    static pendingAccess = new Set();
+    static maxQueued = 10;
+
+    /** @type {Map<number, any[]>} updates received from a user while the admin decides, by user id */
+    static pendingAccess = new Map();
 
     /** @type {Map<number, number>} */
     static deniedAccess = new Map();
@@ -211,25 +213,33 @@ export class Panel {
     /**
      * @param {number} id
      * @param {string} name
+     * @param {any} [update] the message that needs the access, it runs after the admin allows it
      * @returns {string} text for the user
      */
-    static requestAccess(id, name) {
-        if (this.pendingAccess.has(id)) return "Waiting for the admin to allow access";
+    static requestAccess(id, name, update) {
+        var queued = this.pendingAccess.get(id);
+        if (queued) {
+            if (update && queued.length < this.maxQueued) queued.push(update);
+            return "Waiting for the admin to allow access";
+        }
         if (Date.now() - (this.deniedAccess.get(id) ?? 0) < this.denyCooldown) return "The admin denied access";
-        this.pendingAccess.add(id);
-        this.ask(`${name || id} (${id}) wants to use the bot`).then(result => {
+        this.pendingAccess.set(id, update ? [update] : []);
+        this.ask(`${name || id} (${id}) wants to use the bot`).then(async result => {
+            var updates = this.pendingAccess.get(id) ?? [];
             this.pendingAccess.delete(id);
             var text = "The admin did not answer, send a message to ask again";
             if (result == "allow") {
                 if (!Files.settings.allowed?.includes(id)) (Files.settings.allowed ??= []).push(id);
                 Files.saveSettings();
-                text = "The admin allowed access, send a link or an audio file";
+                text = updates.length ? "The admin allowed access" : "The admin allowed access, send a link or an audio file";
             }
             else if (result == "deny") {
                 this.deniedAccess.set(id, Date.now());
                 text = "The admin denied access";
             }
-            App.app.telegram.sendMessage(id, text).catch(() => {});
+            await App.app.telegram.sendMessage(id, text).catch(() => {});
+            if (result != "allow") return;
+            for (var next of updates) await App.app.handleUpdate(next);
         })
         return "Access requested, wait for the admin to allow it";
     }

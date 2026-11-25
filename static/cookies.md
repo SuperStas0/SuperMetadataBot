@@ -10,5 +10,5 @@ Send your YouTube cookies to this chat as a `.txt` file in Netscape format, the 
 5. Send the file to this chat
 
 The file gives access to your account, use a secondary account.
-The cookies are used only for your own requests and only when a video needs them. Only YouTube and Google cookies are kept.
+The cookies are used only for your own requests and only when a video needs them. Only YouTube and Google cookies are kept. The bot checks them with YouTube and saves them only if they work.
 Use /removecookies to delete them.
