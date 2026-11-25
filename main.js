@@ -22,7 +22,11 @@ export class App {
 
     static cacheFolderAge = 30 * 24 * 60 * 60 * 1000;
 
-    static cacheSize = 5 * 1024 * 1024 * 1024;
+    static cacheSizes = {scarce: 2 * 1024 * 1024 * 1024, default: 5 * 1024 * 1024 * 1024, ultimate: 50 * 1024 * 1024 * 1024, disabled: Infinity};
+
+    static getCacheSize() {
+        return this.cacheSizes[Files.getSetting("cacheSize")] ?? this.cacheSizes.default;
+    }
 
     /** @type {Set<number>} */
     static clearing = new Set();
@@ -70,7 +74,7 @@ export class App {
     static clean(force) {
         try {
             if (!force && Object.values(this.data).some(user => user.status == "loading")) return;
-            Files.cleanCache(this.cacheAge, this.cacheFolderAge, this.cacheSize);
+            Files.cleanCache(this.cacheAge, this.cacheFolderAge, this.getCacheSize(), force ? Network.minFreeSpace : 0);
         }
         catch (error) {
             Log.error("Clean cache", error);

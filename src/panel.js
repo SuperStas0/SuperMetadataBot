@@ -10,10 +10,11 @@ export class Panel {
         access: {title: "Access", key: "access", modes: ["public", "confirm", "private"], names: {public: "public", confirm: "confirmation", private: "private"}},
         cookies: {title: "Cookie sharing", key: "shareCookies", modes: ["on", "confirm", "off"], names: {on: "on", confirm: "confirmation", off: "off"}},
         search: {title: "Search confirmation", key: "searchConfirm", modes: ["on", "nonadmin", "off"], names: {on: "on", nonadmin: "non-admin only", off: "off"}},
-        large: {title: "Large files", key: "largeFiles", modes: ["on", "confirm", "off"], names: {on: "on", confirm: "confirmation", off: "off"}}
+        large: {title: "Large files", key: "largeFiles", modes: ["on", "confirm", "off"], names: {on: "on", confirm: "confirmation", off: "off"}},
+        cache: {title: "Cache size", key: "cacheSize", modes: ["scarce", "default", "ultimate", "disabled"], names: {scarce: "scarce, 2 GB", default: "default, 5 GB", ultimate: "ultimate, 50 GB", disabled: "disabled, no limit"}}
     };
 
-    static styles = {public: "success", on: "success", confirm: "primary", nonadmin: "primary", private: "danger", off: "danger"};
+    static styles = {public: "success", on: "success", confirm: "primary", nonadmin: "primary", private: "danger", off: "danger", scarce: "danger", default: "primary", ultimate: "success", disabled: "success"};
 
     static askTimeout = 10 * 60 * 1000;
 
@@ -72,7 +73,7 @@ export class Panel {
     }
 
     static storage() {
-        return {text: Utility.getStorageText(Files.getStorage(), Files.getFreeSpace(), App.cacheSize), markup: Menus.GenerateMarkup(["Refresh", "panel:storage", 0], ["Back", "panel:main", 1])};
+        return {text: Utility.getStorageText(Files.getStorage(), Files.getFreeSpace(), App.getCacheSize()), markup: Menus.GenerateMarkup(["Refresh", "panel:storage", 0], ["Back", "panel:main", 1])};
     }
 
     static deleteMenu() {
@@ -148,6 +149,7 @@ export class Panel {
         if (name == "cookies" && next != "off" && !user.hasCookies()) return "Send your YouTube cookies first, see /cookies";
         Files.settings[option.key] = next;
         Files.saveSettings();
+        if (name == "cache") App.clean();
         return null;
     }
 

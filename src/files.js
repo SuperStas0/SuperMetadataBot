@@ -15,10 +15,10 @@ export class Files {
         if (missing.length) throw new Error(`static\\config.json is missing: ${missing.join(", ")}`);
     }
 
-    /** @type {{access?: "public" | "confirm" | "private", shareCookies?: "on" | "confirm" | "off", searchConfirm?: "on" | "nonadmin" | "off", largeFiles?: "on" | "confirm" | "off", allowed?: number[], cleared?: number[]}} */
+    /** @type {{access?: "public" | "confirm" | "private", shareCookies?: "on" | "confirm" | "off", searchConfirm?: "on" | "nonadmin" | "off", largeFiles?: "on" | "confirm" | "off", cacheSize?: "scarce" | "default" | "ultimate" | "disabled", allowed?: number[], cleared?: number[]}} */
     static settings = this.migrate(this.exists("static", "settings.json") ? this.load("static", "settings.json") : {});
 
-    static defaults = {access: "private", shareCookies: "off", searchConfirm: "off", largeFiles: "off"};
+    static defaults = {access: "private", shareCookies: "off", searchConfirm: "off", largeFiles: "off", cacheSize: "default"};
 
     static posterSizeLimit = 200 * 1024;
 
@@ -91,7 +91,7 @@ export class Files {
     }
 
     /**
-     * @param {"access" | "shareCookies" | "searchConfirm" | "largeFiles"} name
+     * @param {"access" | "shareCookies" | "searchConfirm" | "largeFiles" | "cacheSize"} name
      * @returns {string}
      */
     static getSetting(name) {
@@ -239,8 +239,9 @@ export class Files {
      * @param {number} maxAge
      * @param {number} maxFolderAge
      * @param {number} maxSize
+     * @param {number} [minFree] oldest audio is also deleted while the free disk space is below this
      */
-    static cleanCache(maxAge, maxFolderAge, maxSize) {
+    static cleanCache(maxAge, maxFolderAge, maxSize, minFree = 0) {
         var now = Date.now();
         var audios = [];
         var folders = [];
@@ -261,7 +262,7 @@ export class Files {
 
         var total = audios.reduce((sum, audio) => sum + audio.size, 0);
         for (var audio of audios.sort((first, second) => first.time - second.time)) {
-            if (total <= maxSize) break;
+            if (total <= maxSize && (!minFree || this.getFreeSpace() >= minFree)) break;
             this.tryDelete(audio.path);
             total -= audio.size;
         }
