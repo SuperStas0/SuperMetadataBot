@@ -109,6 +109,7 @@ export class Panel {
         if (page > 0) buttons.push(["Previous", `panel:${source}:${page - 1}`, row]);
         if (page < pages - 1) buttons.push(["Next", `panel:${source}:${page + 1}`, row]);
         if (buttons.length > start) row++;
+        if (filter && this.items.length) buttons.push([`Delete all (${this.items.length})`, `panel:removeAll:${this.listCounter}`, row++, "danger"]);
         if (filter) buttons.push(["Clear filter", "panel:clear", row++]);
         buttons.push(["Back", "panel:delete", row]);
         return {text: lines.join("\n"), markup: Menus.GenerateMarkup(...buttons)};
@@ -201,6 +202,7 @@ export class Panel {
         }
         if (name == "last") return this.deleteLast(ctx, user);
         if (name == "remove") return this.removeAudio(ctx, page);
+        if (name == "removeAll") return this.removeAll(ctx, page);
         if (Object.hasOwn(this.options, name)) {
             var error = this.toggle(name, user);
             if (error) return ctx.answerCbQuery(error, {show_alert: true}).catch(() => {});
@@ -270,6 +272,30 @@ export class Panel {
         }
         ctx.answerCbQuery(text).catch(() => {});
         await this.show(ctx, this.audioList(this.listed.source, this.listed.page));
+    }
+
+    /**
+     * Deletes every audio of the filtered list
+     * @param {Context} ctx
+     * @param {number} key of the opened list
+     */
+    static async removeAll(ctx, key) {
+        if (!this.filter || key != this.listCounter) return ctx.answerCbQuery("The list changed, open it again", {show_alert: true}).catch(() => {});
+        if (Object.values(App.data).some(user => user.status == "loading")) return ctx.answerCbQuery("Audio is being loaded, try again later", {show_alert: true}).catch(() => {});
+        var deleted = 0;
+        var failed = 0;
+        for (var item of this.items) {
+            try {
+                Files.deleteAudio(item.path);
+                deleted++;
+            }
+            catch (error) {
+                Log.error("Delete audio", error);
+                failed++;
+            }
+        }
+        ctx.answerCbQuery(failed ? `${deleted} deleted, ${failed} failed` : `${deleted} audios deleted`).catch(() => {});
+        await this.show(ctx, this.audioList(this.listed.source, 0));
     }
 
     /**

@@ -33,7 +33,7 @@ Then you can:
 
 Errors are written to `logs\error.log`. The admin can view the last one in the admin panel (`/admin`).
 
-In Delete audio of the admin panel (`/admin`) the admin can delete the audio of their last load, or any stored YouTube or uploaded audio from a list. While a list is open, a text message filters it by title or performer instead of searching YouTube, Clear filter shows the whole list again. A deleted audio is downloaded again when someone loads it.
+In Delete audio of the admin panel (`/admin`) the admin can delete the audio of their last load, or any stored YouTube or uploaded audio from a list. While a list is open, a text message filters it by title or performer instead of searching YouTube, Clear filter shows the whole list again, Delete all deletes every audio that matches the filter. A deleted audio is downloaded again when someone loads it.
 
 In the Settings of the admin panel (`/admin`) the admin picks the cache size, a preset for how much and for how long audio is stored. The oldest audio is deleted first. The age counts from the last use. Changing the preset cleans the cache right away. The state is saved to `static\settings.json`.
 
