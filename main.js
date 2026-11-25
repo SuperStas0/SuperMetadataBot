@@ -275,6 +275,11 @@ export class App {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
 
+            if (Panel.listing && user.isAdmin() && (user.status == "none" || user.status == "default")) {
+                if (!ctx.message.text.startsWith("/")) Panel.setFilter(ctx, ctx.message.text);
+                return;
+            }
+
             if (user.status == "none" || user.status == "default") {
                 var urls = Utility.getUrls(ctx);
                 var lists = Utility.getPlaylistUrls(ctx);

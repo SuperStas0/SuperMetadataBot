@@ -30,6 +30,13 @@ export class Panel {
 
     static listCounter = 0;
 
+    static listing = false;
+
+    static filter = "";
+
+    /** @type {number | null} */
+    static listMessage = null;
+
     /** @type {{id: string, path: string, title: string, size: number, time: number, key: number}[]} audios shown in the last opened list */
     static items = [];
 
@@ -77,26 +84,31 @@ export class Panel {
      * @param {number} page
      */
     static audioList(source, page) {
-        this.items = Files.listAudios(source).map(item => ({...item, key: ++this.listCounter}));
+        var all = Files.listAudios(source).map(item => ({...item, key: ++this.listCounter}));
+        var filter = this.filter.toLowerCase();
+        this.items = filter ? all.filter(item => item.title.replace(/\s+/g, " ").toLowerCase().includes(filter) || item.performer.replace(/\s+/g, " ").toLowerCase().includes(filter)) : all;
         var pages = Math.max(1, Math.ceil(this.items.length / this.pageSize));
         page = Math.min(page, pages - 1);
         this.listed = {source: source, page: page};
         var from = page * this.pageSize;
         var shown = this.items.slice(from, from + this.pageSize);
         var total = this.items.reduce((sum, item) => sum + item.size, 0);
-        var lines = [`${this.sources[source]}: \`${this.items.length} stored, ${Utility.getSizeString(total)}\``];
+        var lines = [`${this.sources[source]}: \`${filter ? `${this.items.length} of ${all.length}` : this.items.length} stored, ${Utility.getSizeString(total)}\``];
+        if (filter) lines.push(`Filter: \`${Utility.escapeCode(this.filter)}\``);
         shown.forEach((item, index) => {
             var title = Utility.escapeCode(item.title.replace(/\s+/g, " ").slice(0, 40)) || item.id;
             lines.push(`${from + index + 1}\\. \`${title}\` \`${Utility.getSizeString(item.size)}, ${new Date(item.time).toISOString().slice(0, 10)}\``);
         });
         if (pages > 1) lines.push(`Page ${page + 1}/${pages}`);
-        lines.push(shown.length ? "Select a number to delete that audio" : "No audio in storage");
+        lines.push(shown.length ? "Select a number to delete that audio" : filter ? "No audio matches the filter" : "No audio in storage");
+        if (!filter) lines.push("Send a text to filter by title or performer");
         var buttons = shown.map((item, index) => [`${from + index + 1}`, `panel:remove:${item.key}`, Math.floor(index / 4), "danger"]);
         var row = Math.ceil(shown.length / 4);
         var start = buttons.length;
         if (page > 0) buttons.push(["Previous", `panel:${source}:${page - 1}`, row]);
         if (page < pages - 1) buttons.push(["Next", `panel:${source}:${page + 1}`, row]);
         if (buttons.length > start) row++;
+        if (filter) buttons.push(["Clear filter", "panel:clear", row++]);
         buttons.push(["Back", "panel:delete", row]);
         return {text: lines.join("\n"), markup: Menus.GenerateMarkup(...buttons)};
     }
@@ -145,6 +157,8 @@ export class Panel {
     static async open(user) {
         if (this.message) App.app.telegram.deleteMessage(user.id, this.message).catch(() => {});
         this.message = null;
+        this.listing = false;
+        this.filter = "";
         var view = this.main();
         var msg = await App.app.telegram.sendMessage(user.id, view.text, view.markup);
         this.message = msg.message_id;
@@ -153,10 +167,12 @@ export class Panel {
     /**
      * @param {Context} ctx
      * @param {{text: string, markup: any}} view
+     * @param {number} [message] edit this message instead of the one of the pressed button
      */
-    static async show(ctx, view) {
+    static async show(ctx, view, message) {
         try {
-            await ctx.editMessageText(view.text, view.markup);
+            if (message) await ctx.telegram.editMessageText(ctx.chat.id, message, undefined, view.text, view.markup);
+            else await ctx.editMessageText(view.text, view.markup);
         }
         catch (error) {
             if (!error.response?.description?.includes("message is not modified")) Log.error("Panel", error);
@@ -172,6 +188,8 @@ export class Panel {
     static async handle(ctx, user, name, page) {
         if (name == "close") {
             this.message = null;
+            this.listing = false;
+            this.filter = "";
             ctx.answerCbQuery().catch(() => {});
             ctx.deleteMessage().catch(() => {});
             return;
@@ -183,9 +201,30 @@ export class Panel {
             if (error) return ctx.answerCbQuery(error, {show_alert: true}).catch(() => {});
             name = "settings";
         }
+        if (name == "clear" && this.listing) {
+            this.filter = "";
+            name = this.listed.source;
+            page = 0;
+        }
+        this.listing = Object.hasOwn(this.sources, name);
+        if (this.listing) this.listMessage = ctx.callbackQuery.message?.message_id ?? null;
+        else this.filter = "";
         ctx.answerCbQuery().catch(() => {});
         var view = name == "log" ? this.log(page) : name == "storage" ? this.storage() : name == "error" ? this.error() : name == "settings" ? this.settings() : name == "delete" ? this.deleteMenu() : Object.hasOwn(this.sources, name) ? this.audioList(name, page) : this.main();
         await this.show(ctx, view);
+    }
+
+    /**
+     * Filters the opened audio list by title or performer
+     * @param {Context} ctx
+     * @param {string} text
+     */
+    static async setFilter(ctx, text) {
+        ctx.deleteMessage(ctx.message.message_id).catch(() => {});
+        var filter = text.replace(/\s+/g, " ").trim().slice(0, 200);
+        if (!filter || !this.listMessage) return;
+        this.filter = filter;
+        await this.show(ctx, this.audioList(this.listed.source, 0), this.listMessage);
     }
 
     /**

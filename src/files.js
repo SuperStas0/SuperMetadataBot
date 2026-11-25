@@ -316,11 +316,14 @@ export class Files {
                 var stats = this.list(path).filter(name => /^audio(-limited)?\.m4a$/.test(name)).map(name => fs.statSync(this.path(path, name)));
                 if (!stats.length) continue;
                 var title = null;
+                var performer = null;
                 try {
-                    title = this.load(path, "data.json").title;
+                    var data = this.load(path, "data.json");
+                    title = data.title;
+                    performer = data.performer;
                 }
                 catch {}
-                audios.push({id: id, path: path, title: title ? String(title) : id, size: stats.reduce((sum, item) => sum + item.size, 0), time: Math.max(...stats.map(item => item.mtimeMs))});
+                audios.push({id: id, path: path, title: title ? String(title) : id, performer: performer ? String(performer) : "", size: stats.reduce((sum, item) => sum + item.size, 0), time: Math.max(...stats.map(item => item.mtimeMs))});
             }
             catch (error) {
                 if (error.code != "ENOENT") Log.error(`List audio ${path}`, error);

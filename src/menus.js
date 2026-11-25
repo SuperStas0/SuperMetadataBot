@@ -86,7 +86,7 @@ export class Menus {
     static GeneratePoster(poster, formatted, uploaded) {
         var buttons = [];
         if (poster) buttons.push([formatted ? "Unformat" : "Format", "format"]);
-        if (poster != "default") buttons.push([uploaded ? "Set original" : "Set youtube", "default"]);
+        if (poster != "default") buttons.push(["Set original", "default"]);
         if (poster) buttons.push(["Remove", "null"]);
         buttons.push(["Back", "cancel"]);
         return this.GenerateMarkup(...buttons.map(([name, command], row) => [name, command, row]));
