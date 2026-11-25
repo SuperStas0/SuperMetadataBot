@@ -26,7 +26,7 @@ Then you can:
 - Change title, in a batch one after another from the first audio to the last
 - Change the order of a batch
 - Change performer
-- Change poster: send a photo or a YouTube link, audio files keep their embedded cover or Telegram thumbnail
+- Change poster: send a photo, a YouTube link, or a text to search YouTube and take the thumbnail of the first result, audio files keep their embedded cover or Telegram thumbnail
 - Format the poster: remove black edges equally from both sides, cut a square from the center, scaled down to 320x320 at most, smaller images are not enlarged or padded, every new poster is formatted by default and Unformat restores the original
 - Unbatch: set performer and poster for one audio of a batch instead of the whole batch
 - Change duration

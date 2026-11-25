@@ -257,7 +257,7 @@ export class App {
         })
 
         this.app.command("help", async ctx => {
-            ctx.reply(Files.helpText, Menus.Simple);
+            for (var page of Files.helpPages) await ctx.reply(page, Menus.Simple);
         })
 
         this.app.command("cookies", async ctx => {
@@ -327,9 +327,10 @@ export class App {
             }
             else if (user.status == "poster") {
                 var links = Utility.getUrls(ctx);
-                if (links.length != 1) return;
+                if (links.length > 1 || !links.length && (ctx.message.text.startsWith("/") || ctx.message.entities?.some(entity => entity.type == "url"))) return;
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
-                user.setLinkPoster(links[0]);
+                if (links.length) user.setLinkPoster(links[0]);
+                else user.askSearch(ctx.message.text, true);
             }
             else if (user.status == "cuts") {
                 var parsed = Utility.parseCuts(ctx.message.text, user.getAudio().source.duration);

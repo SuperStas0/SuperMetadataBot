@@ -26,6 +26,8 @@ export class Files {
 
     static posterBlackLevel = 24;
 
+    static audioBitrate = 192;
+
     static silenceNoise = "-60dB";
 
     static silenceDuration = 2;
@@ -33,8 +35,8 @@ export class Files {
     /** @type {string} */
     static startText = Utility.escapeMarkdown(this.read("static", "start.md"));
 
-    /** @type {string} */
-    static helpText = Utility.escapeMarkdown(this.read("static", "help.md"));
+    /** @type {string[]} */
+    static helpPages = Utility.joinPages(Utility.escapeMarkdown(this.read("static", "help.md")).trim().split(/\n\s*\n/), 4000);
 
     /** @type {string} */
     static cookiesText = Utility.escapeMarkdown(this.read("static", "cookies.md"));
@@ -373,9 +375,33 @@ export class Files {
         var duration = 0;
         var command = ffmpeg(inputPath).on("codecData", data => { duration = Utility.parseClock(data.duration); }).outputOptions("-map", "0:a:0", "-map_metadata", "-1");
         if (copy) command.audioCodec("copy");
-        else command.audioCodec("aac").audioBitrate("192k");
+        else command.audioCodec("aac").audioBitrate(`${Math.min(await this.getAudioBitrate(inputPath) ?? this.audioBitrate, this.audioBitrate)}k`);
         await this.runFfmpeg(command, outputPath, signal, onProgress);
         return Math.round(duration);
+    }
+
+    /**
+     * @param {string} inputPath
+     * @returns {Promise<number | null>} bitrate in kbit/s of the first audio stream, or of the whole file if the stream does not tell it, null if neither is known
+     */
+    static async getAudioBitrate(inputPath) {
+        var stream = null;
+        var file = null;
+        var output = false;
+        var command = ffmpeg(inputPath).outputOptions("-map", "0:a:0", "-frames:a", "1").format("null");
+        command.on("stderr", line => {
+            if (line.startsWith("Output #")) output = true;
+            if (output) return;
+            stream ??= Number(line.match(/Stream #\d+:\d+.*?: Audio: .*?(\d+) kb\/s/)?.[1]) || null;
+            file ??= Number(line.match(/Duration: [\d:.]+, .*?bitrate: (\d+) kb\/s/)?.[1]) || null;
+        });
+        try {
+            await this.runFfmpeg(command, "-");
+        }
+        catch {
+            return null;
+        }
+        return stream ?? file;
     }
 
     /**

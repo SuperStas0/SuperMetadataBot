@@ -57,6 +57,8 @@ export class User {
         this.incomingTimer = null;
         /** @type {string | null} */
         this.askQuery = null;
+        /** @type {boolean} the confirmed search sets the poster instead of listing the results */
+        this.askPoster = false;
         /** @type {number | null} */
         this.askMenu = null;
         /** @type {AbortController | null} */
@@ -374,28 +376,61 @@ export class User {
 
     /**
      * @param {string} text
+     * @param {boolean} [poster] the first result becomes the poster
      */
-    async askSearch(text) {
+    async askSearch(text, poster = false) {
         var query = text.replace(/\s+/g, " ").trim().slice(0, 200);
         if (!query) return;
         this.removeAsk();
         var mode = Files.getSetting("searchConfirm");
-        if (mode == "off" || mode == "nonadmin" && this.isAdmin()) return this.search(query);
+        if (mode == "off" || mode == "nonadmin" && this.isAdmin()) return poster ? this.searchPoster(query) : this.search(query);
         this.askQuery = query;
+        this.askPoster = poster;
         var msg = await App.app.telegram.sendMessage(this.id, `Search for \`${Utility.escapeCode(query)}\`?`, Menus.SearchAsk);
         this.askMenu = msg.message_id;
     }
 
     confirmSearch() {
         var query = this.askQuery;
+        var poster = this.askPoster;
         this.removeAsk();
-        if (query) this.search(query);
+        if (!query) return;
+        if (poster) this.searchPoster(query);
+        else this.search(query);
     }
 
     removeAsk() {
         if (this.askMenu) App.app.telegram.deleteMessage(this.id, this.askMenu).catch(() => {});
         this.askMenu = null;
         this.askQuery = null;
+        this.askPoster = false;
+    }
+
+    /**
+     * @param {string} query
+     */
+    async searchPoster(query) {
+        if (this.status != "poster") return;
+        var signal = this.startAction(() => {
+            this.clearStatus();
+            this.status = "poster";
+        });
+        this.status = "loading";
+        this.updateStatus(`Searching: ${query}`);
+        try {
+            var results = await Utility.abortable(Utility.timeout(this.withCookies(cookies => Network.fetchSearch(query, cookies), query, signal), Network.infoTimeout, "Search timed out"), signal);
+            this.clearStatus();
+            this.status = "poster";
+            if (!results.length) return this.notify(`Nothing found: ${query}`);
+            await this.setLinkPoster(`https://www.youtube.com/watch?v=${results[0].id}`);
+        }
+        catch (error) {
+            if (signal.aborted) return;
+            Log.error(`Search poster ${query} (user ${this.id})`, error);
+            this.clearStatus();
+            this.status = "poster";
+            this.notify(Network.needsCookies(error) ? this.getBlockedText(error) : `Search failed: ${query}`);
+        }
     }
 
     /**
