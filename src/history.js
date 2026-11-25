@@ -85,7 +85,7 @@ export class History {
         if (audio.cuts.length) changes.push(`cuts: ${audio.cuts.map(([start, end]) => `${Utility.getDurationString(start)}-${Utility.getDurationString(end)}`).join(", ")}`);
         var poster = source.uploaded && !Files.exists(source.path, "poster.jpg") ? null : "default";
         if (audio.poster != poster) changes.push(audio.poster == "custom" ? "poster: custom" : audio.poster == "default" ? "poster: default" : "poster: removed");
-        else if (audio.poster && audio.posterFormatted != !source.uploaded) changes.push(audio.posterFormatted ? "poster: formatted" : "poster: unformatted");
+        else if (audio.poster && !audio.posterFormatted) changes.push("poster: unformatted");
         return changes;
     }
 

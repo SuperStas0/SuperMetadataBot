@@ -946,7 +946,7 @@ export class User {
         if (!mode) audio.poster = null;
         else {
             audio.poster = "default";
-            audio.posterFormatted = !audio.source.uploaded;
+            audio.posterFormatted = true;
         }
     }
 
@@ -959,7 +959,14 @@ export class User {
         if (!fileLink || !await Network.downloadImage(fileLink, path).catch(() => false)) return this.updateStatus("Failed to download poster");
         this.clearStatus();
         Files.delete(path.replace(/\.jpg$/, "-formatted.jpg"));
-        this.applyCustomPoster(path, fileId, false);
+        try {
+            await this.getFormatted(path);
+        }
+        catch (error) {
+            Log.error(`Format poster (user ${this.id})`, error);
+            return this.updateStatus("Failed to format the poster");
+        }
+        this.applyCustomPoster(path, fileId);
         this.sendMenu("poster");
     }
 
@@ -984,21 +991,20 @@ export class User {
             return this.updateStatus("Failed to format the poster");
         }
         this.clearStatus();
-        this.applyCustomPoster(path, null, true);
+        this.applyCustomPoster(path, null);
         this.sendMenu("poster");
     }
 
     /**
      * @param {string} path
      * @param {string | null} fileId
-     * @param {boolean} formatted
      */
-    applyCustomPoster(path, fileId, formatted) {
+    applyCustomPoster(path, fileId) {
         for (var audio of this.getShared()) {
             audio.poster = "custom";
             audio.posterId = fileId;
             audio.posterFile = path;
-            audio.posterFormatted = formatted;
+            audio.posterFormatted = true;
         }
     }
 
