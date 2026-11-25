@@ -35,8 +35,8 @@ export class Files {
     /** @type {string} */
     static startText = Utility.escapeMarkdown(this.read("static", "start.md"));
 
-    /** @type {string[]} */
-    static helpPages = Utility.joinPages(Utility.escapeMarkdown(this.read("static", "help.md")).trim().split(/\n\s*\n/), 4000);
+    /** @type {string} */
+    static helpText = Utility.escapeMarkdown(this.read("static", "help.md"));
 
     /** @type {string} */
     static cookiesText = Utility.escapeMarkdown(this.read("static", "cookies.md"));

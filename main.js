@@ -257,7 +257,7 @@ export class App {
         })
 
         this.app.command("help", async ctx => {
-            for (var page of Files.helpPages) await ctx.reply(page, Menus.Simple);
+            ctx.reply(Files.helpText, Menus.Simple);
         })
 
         this.app.command("cookies", async ctx => {

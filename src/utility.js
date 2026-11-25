@@ -310,25 +310,6 @@ export class Utility {
     }
 
     /**
-     * @param {string[]} blocks
-     * @param {number} limit of characters in a page, a block longer than that stays a page of its own
-     * @returns {string[]} blocks joined with an empty line between them
-     */
-    static joinPages(blocks, limit) {
-        var pages = [];
-        var page = "";
-        for (var block of blocks) {
-            if (page && page.length + block.length + 2 > limit) {
-                pages.push(page);
-                page = "";
-            }
-            page += page ? `\n\n${block}` : block;
-        }
-        if (page) pages.push(page);
-        return pages;
-    }
-
-    /**
      * @param {string} name
      */
     static getFileName(name) {
