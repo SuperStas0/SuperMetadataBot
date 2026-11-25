@@ -21,6 +21,9 @@ export class Audio {
         /** @type {string | null} */
         this.posterId = null;
 
+        /** @type {string | null} file of the custom poster */
+        this.posterFile = null;
+
         /** @type {boolean} */
         this.posterFormatted = false;
 

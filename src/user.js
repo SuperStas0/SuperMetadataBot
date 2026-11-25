@@ -65,6 +65,8 @@ export class User {
         this.onCancel = null;
         /** @type {number} position in the batch to return to after setting titles */
         this.titleReturn = 0;
+        /** @type {boolean} performer and poster changes apply to the whole batch */
+        this.batched = true;
     }
 
     /**
@@ -114,6 +116,12 @@ export class User {
         if (this.playlistId + 1 >= this.playlist.length) return this.back();
         this.playlistId += 1;
         this.sendMenu("titles");
+    }
+
+    toggleBatch() {
+        if (this.mode != "playlist" || this.status != "default") return;
+        this.batched = !this.batched;
+        this.sendMenu("default");
     }
 
     startOrder() {
@@ -443,6 +451,16 @@ export class User {
 
     /**
      * @param {TelegramFile} file
+     * @param {string} path of the poster, nothing is loaded if it exists
+     */
+    async importThumbnail(file, path) {
+        if (!file.thumbnailId || Files.exists(path)) return;
+        var link = await App.app.telegram.getFileLink(file.thumbnailId).catch(() => null);
+        if (link) await Network.downloadImage(String(link), path, Network.posterFileLimit).catch(error => Log.error(`Load thumbnail (user ${this.id})`, error));
+    }
+
+    /**
+     * @param {TelegramFile} file
      * @param {AbortSignal} signal
      * @param {string} [counter] position in a batch for the status text
      * @returns {Promise<AudioSource>}
@@ -459,7 +477,11 @@ export class User {
 
         await Utility.abortable(Utility.lock(path, async () => {
             var best = Files.path(path, "audio.m4a");
-            if (Files.exists(path, "data.json") && Files.exists(best)) return Files.touch(best);
+            var poster = Files.path(path, "poster.jpg");
+            if (Files.exists(path, "data.json") && Files.exists(best)) {
+                await this.importThumbnail(file, poster);
+                return Files.touch(best);
+            }
 
             Files.createFolder(path);
             var link = String(await App.app.telegram.getFileLink(file.id));
@@ -482,7 +504,8 @@ export class User {
                 if (!duration) throw new Error("Failed to read the audio duration");
                 if (duration > Network.maxDuration) throw User.expected("Audio is too long");
                 Files.move(temp, best);
-                await Files.extractCover(original, Files.path(path, "poster.jpg")).catch(() => {});
+                await Files.extractCover(original, poster).catch(() => {});
+                await this.importThumbnail(file, poster);
                 Files.saveAudio(path, Object.assign(new AudioSource(), {title: title, performer: performer, duration: duration}));
             }
             finally {
@@ -577,9 +600,16 @@ export class User {
         if (!audios.length) return this.fail(previous, `Failed to load: ${failed.join(", ")}`);
         if (failed.length) this.notify(`Failed to load: ${failed.join(", ")}`);
         this.removeSearch();
-        this.mode = "playlist";
-        this.playlist = audios;
-        this.playlistId = 0;
+        if (audios.length == 1) {
+            this.mode = "telegram";
+            this.audio = audios[0];
+        }
+        else {
+            this.mode = "playlist";
+            this.playlist = audios;
+            this.playlistId = 0;
+            this.batched = true;
+        }
         App.clean(true);
         this.clearStatus();
         this.status = "default";
@@ -680,6 +710,7 @@ export class User {
 
     async parsePlaylist() {
         var signal = this.startAction(() => this.decline());
+        this.batched = true;
         this.playlistId = 0;
         while (this.playlistId < this.playlist.length) {
             this.setPoster("default");
@@ -689,6 +720,10 @@ export class User {
         }
         this.status = this.playlist.length ? "default" : "none";
         this.playlistId = 0;
+        if (this.playlist.length == 1) {
+            this.mode = "youtube";
+            this.audio = this.playlist[0];
+        }
         await this.sendMenu("new");
     }
 
@@ -743,7 +778,7 @@ export class User {
         else if (mode == "poster") {
             if (audio.poster) {
                 this.removeMenu();
-                var poster = audio.posterId;
+                var poster = audio.posterId ?? {source: audio.posterFile};
                 if (audio.poster == "default") poster = audio.source.posterId ?? {source: Files.path(audio.source.path, "poster.jpg")};
                 if (audio.posterFormatted) poster = {source: await this.getPosterFile()};
                 var markup = Menus.GeneratePoster(audio.poster, audio.posterFormatted, audio.source.uploaded);
@@ -861,7 +896,7 @@ export class User {
     }
 
     getMainMenu() {
-        return this.mode == "playlist" ? Menus.Batch : Menus.Main;
+        return this.mode == "playlist" ? Menus.GenerateBatch(this.batched) : Menus.Main;
     }
 
     /**
@@ -881,40 +916,38 @@ export class User {
         return this.mode == "playlist" ? this.playlist : [this.audio];
     }
 
+    getShared() {
+        return this.mode == "playlist" && this.batched ? this.playlist : [this.getAudio()];
+    }
+
     /**
      * @param {string | null} performer
      */
     setPerformer(performer) {
-        for (var audio of this.getAudios()) audio.performer = performer;
+        for (var audio of this.getShared()) audio.performer = performer;
     }
 
     resetPerformer() {
-        for (var audio of this.getAudios()) audio.performer = audio.source.performer;
+        for (var audio of this.getShared()) audio.performer = audio.source.performer;
     }
 
     /**
-     * @param {"default"| {} & string | null} mode
+     * @param {"default" | null} mode
      */
     applyPoster(mode) {
-        for (var audio of this.getAudios()) this.setPoster(mode == "default" && !Files.exists(audio.source.path, "poster.jpg") ? null : mode, audio);
+        for (var audio of this.getShared()) this.setPoster(mode == "default" && !Files.exists(audio.source.path, "poster.jpg") ? null : mode, audio);
     }
 
     /**
-     * @param {"default"| {} & string | null} mode
+     * @param {"default" | null} mode
      * @param {Audio} [audio]
      */
     setPoster(mode, audio = this.getAudio()) {
         if (!mode) audio.poster = null;
-        else if (mode == "default") {
+        else {
             audio.poster = "default";
             audio.posterFormatted = !audio.source.uploaded;
         }
-        else {
-            audio.poster = "custom";
-            audio.posterId = mode;
-            audio.posterFormatted = false;
-        }
-
     }
 
     /**
@@ -922,11 +955,51 @@ export class User {
      */
     async setCustomPoster(fileId) {
         var fileLink = await App.app.telegram.getFileLink(fileId).catch(() => null);
-        if (!fileLink || !await Network.downloadImage(fileLink, this.getPosterPath()).catch(() => false)) return this.updateStatus("Failed to download poster");
+        var path = this.getPosterPath();
+        if (!fileLink || !await Network.downloadImage(fileLink, path).catch(() => false)) return this.updateStatus("Failed to download poster");
         this.clearStatus();
-        Files.delete(this.getPosterPath().replace(/\.jpg$/, "-formatted.jpg"));
-        this.applyPoster(fileId);
+        Files.delete(path.replace(/\.jpg$/, "-formatted.jpg"));
+        this.applyCustomPoster(path, fileId, false);
         this.sendMenu("poster");
+    }
+
+    /**
+     * @param {string} url of a YouTube video, its thumbnail becomes the formatted poster
+     */
+    async setLinkPoster(url) {
+        var id = Utility.getIdFromUrl(url);
+        var path = this.getPosterPath();
+        var loaded = false;
+        for (var name of ["maxresdefault", "sddefault", "hqdefault"]) {
+            loaded = await Network.downloadImage(`https://i.ytimg.com/vi/${id}/${name}.jpg`, path, Network.posterFileLimit).catch(() => false);
+            if (loaded) break;
+        }
+        if (!loaded) return this.updateStatus("Failed to download poster");
+        Files.delete(path.replace(/\.jpg$/, "-formatted.jpg"));
+        try {
+            await this.getFormatted(path);
+        }
+        catch (error) {
+            Log.error(`Format poster (user ${this.id})`, error);
+            return this.updateStatus("Failed to format the poster");
+        }
+        this.clearStatus();
+        this.applyCustomPoster(path, null, true);
+        this.sendMenu("poster");
+    }
+
+    /**
+     * @param {string} path
+     * @param {string | null} fileId
+     * @param {boolean} formatted
+     */
+    applyCustomPoster(path, fileId, formatted) {
+        for (var audio of this.getShared()) {
+            audio.poster = "custom";
+            audio.posterId = fileId;
+            audio.posterFile = path;
+            audio.posterFormatted = formatted;
+        }
     }
 
     removeMenu() {
@@ -1120,7 +1193,7 @@ export class User {
 
     async getPosterFile() {
         var audio = this.getAudio();
-        var path = audio.poster == "default" ? Files.path(audio.source.path, "poster.jpg") : this.getPosterPath();
+        var path = audio.poster == "default" ? Files.path(audio.source.path, "poster.jpg") : audio.posterFile;
         return audio.posterFormatted ? await this.getFormatted(path) : path;
     }
 
@@ -1138,7 +1211,7 @@ export class User {
         var audio = this.getAudio();
         if (this.status != "poster" || !audio.poster) return;
         var value = !audio.posterFormatted;
-        var changed = this.getAudios().filter(item => item.poster);
+        var changed = this.getShared().filter(item => item.poster);
         var previous = changed.map(item => item.posterFormatted);
         changed.forEach(item => item.posterFormatted = value);
         try {
@@ -1167,7 +1240,7 @@ export class User {
     }
 
     getPosterPath() {
-        return Files.path(this.getUserPath(), this.mode == "playlist" ? "poster-batch.jpg" : "poster.jpg");
+        return Files.path(this.getUserPath(), this.mode != "playlist" ? "poster.jpg" : this.batched ? "poster-batch.jpg" : `poster${Date.now()}.jpg`);
     }
 
     getInfo() {

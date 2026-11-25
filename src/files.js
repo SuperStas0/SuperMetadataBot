@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { PassThrough } from "node:stream";
 import { join, resolve as resolvePath } from "path";
 import ffmpeg from "fluent-ffmpeg";
 import { AudioSource } from "./audio.js";
@@ -20,6 +21,10 @@ export class Files {
     static defaults = {access: "private", shareCookies: "off", searchConfirm: "off", largeFiles: "off"};
 
     static posterSizeLimit = 200 * 1024;
+
+    static posterSize = 320;
+
+    static posterBlackLevel = 24;
 
     static silenceNoise = "-60dB";
 
@@ -373,15 +378,16 @@ export class Files {
     }
 
     /**
-     * Removes black edges, crops to 1:1 and resizes to fit the Telegram thumbnail limits
+     * Removes black edges equally from both sides, fits the whole image into a square with black fields and resizes it to the Telegram thumbnail limits
      * @param {string} inputPath
      * @param {string} outputPath
      */
     static async formatPoster(inputPath, outputPath) {
         var temp = outputPath.replace(/\.jpg$/, ".tmp.jpg");
-        var crop = await this.detectBlackEdges(inputPath);
-        var filters = ["crop='min(iw,ih)':'min(iw,ih)'", "scale=320:320"];
-        if (crop) filters.unshift(`crop=${crop}`);
+        var margins = await this.detectBlackMargins(inputPath);
+        var size = this.posterSize;
+        var filters = [`scale=${size}:${size}:force_original_aspect_ratio=decrease`, `pad=${size}:${size}:(ow-iw)/2:(oh-ih)/2:black`, "setsar=1", "format=yuvj420p"];
+        if (margins) filters.unshift(`crop=iw-${margins[0] * 2}:ih-${margins[1] * 2}:${margins[0]}:${margins[1]}`);
         try {
             for (var quality of [3, 8, 15]) {
                 await new Promise((resolve, reject) => ffmpeg(inputPath).videoFilters(filters).outputOptions("-frames:v", "1", "-q:v", String(quality)).on("end", resolve).on("error", reject).save(temp));
@@ -397,26 +403,49 @@ export class Files {
 
     /**
      * @param {string} inputPath
-     * @returns {Promise<string | null>} width:height:x:y of the image without black edges, null if nothing to trim
+     * @returns {Promise<[number, number] | null>} black margin to cut from the left and the right, and from the top and the bottom, the smaller one of each pair, null if nothing to trim
      */
-    static async detectBlackEdges(inputPath) {
+    static async detectBlackMargins(inputPath) {
         var size = null;
-        var crop = null;
-        var command = ffmpeg(inputPath).videoFilters("cropdetect=limit=32:round=2:skip=0").outputOptions("-frames:v", "1").format("null");
+        var chunks = [];
+        var stream = new PassThrough();
+        stream.on("data", chunk => chunks.push(chunk));
+        var command = ffmpeg(inputPath).videoFilters("format=gray").outputOptions("-frames:v", "1").format("rawvideo");
         command.on("stderr", line => {
             size = line.match(/Video:.*?(\d{2,5})x(\d{2,5})/)?.slice(1).map(Number) ?? size;
-            crop = line.match(/crop=(\d+):(\d+):(\d+):(\d+)/)?.slice(1).map(Number) ?? crop;
         });
         try {
-            await this.runFfmpeg(command, "-");
+            await new Promise((resolve, reject) => command.on("end", resolve).on("error", reject).pipe(stream));
         }
         catch {
             return null;
         }
-        if (!size || !crop) return null;
-        var area = crop[0] * crop[1];
-        if (crop[0] < 64 || crop[1] < 64 || area < size[0] * size[1] * 0.2 || area == size[0] * size[1]) return null;
-        return crop.join(":");
+        var pixels = Buffer.concat(chunks);
+        if (!size || pixels.length != size[0] * size[1]) return null;
+
+        var [width, height] = size;
+        var level = this.posterBlackLevel;
+        var rowBlack = y => pixels.subarray(y * width, (y + 1) * width).every(value => value <= level);
+        var columnBlack = x => {
+            for (var y = 0; y < height; y++) if (pixels[y * width + x] > level) return false;
+            return true;
+        };
+
+        var top = 0;
+        while (top < height && rowBlack(top)) top++;
+        if (top == height) return null;
+        var bottom = 0;
+        while (rowBlack(height - 1 - bottom)) bottom++;
+        var left = 0;
+        while (columnBlack(left)) left++;
+        var right = 0;
+        while (columnBlack(width - 1 - right)) right++;
+
+        var horizontal = Math.min(left, right);
+        var vertical = Math.min(top, bottom);
+        if (!horizontal && !vertical) return null;
+        if ((width - horizontal * 2) * (height - vertical * 2) < width * height * 0.2) return null;
+        return [horizontal, vertical];
     }
 
     /**

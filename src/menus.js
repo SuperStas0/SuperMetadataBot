@@ -25,7 +25,12 @@ export class Menus {
 
     static Main = this.GenerateMarkup(["Send", "send", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2]);
 
-    static Batch = this.GenerateMarkup(["Send", "send", 0], ["Send All", "sendAll", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2], ["Previous", "prev", 3], ["Next", "next", 3], ["Titles", "titles", 4], ["Order", "order", 4]);
+    /**
+     * @param {boolean} batched
+     */
+    static GenerateBatch(batched) {
+        return this.GenerateMarkup(["Send", "send", 0], ["Send All", "sendAll", 0], ["Title", "title", 1], ["Performer", "performer", 1], ["Cuts", "cuts", 2], ["Poster", "poster", 2], ["Previous", "prev", 3], ["Next", "next", 3], ["Titles", "titles", 4], ["Order", "order", 4], [batched ? "Unbatch" : "Batch", "batch", 4]);
+    }
 
     static Titles = this.GenerateMarkup(["Skip", "skip", 0], ["Back", "cancel", 1]);
 

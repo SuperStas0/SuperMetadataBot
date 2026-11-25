@@ -164,6 +164,8 @@ export class App {
 
         this.action("order", user => user.startOrder());
 
+        this.action("batch", user => user.toggleBatch());
+
         this.action("moveUp", user => user.moveCurrent(user.playlistId - 1));
 
         this.action("moveDown", user => user.moveCurrent(user.playlistId + 1));
@@ -323,6 +325,12 @@ export class App {
                 if (error) return user.updateStatus(error);
                 ctx.deleteMessage(ctx.message.message_id).catch(() => {});
             }
+            else if (user.status == "poster") {
+                var links = Utility.getUrls(ctx);
+                if (links.length != 1) return;
+                ctx.deleteMessage(ctx.message.message_id).catch(() => {});
+                user.setLinkPoster(links[0]);
+            }
             else if (user.status == "cuts") {
                 var parsed = Utility.parseCuts(ctx.message.text, user.getAudio().source.duration);
                 if (parsed.error) return user.updateStatus(parsed.error);
@@ -353,7 +361,7 @@ export class App {
                 user.setCookies(document);
             }
             else if (Utility.isAudioDocument(document)) {
-                user.loadFile({id: document.file_id, uniqueId: document.file_unique_id, size: document.file_size, name: document.file_name, document: true, messageId: ctx.message.message_id});
+                user.loadFile({id: document.file_id, uniqueId: document.file_unique_id, size: document.file_size, name: document.file_name, document: true, messageId: ctx.message.message_id, thumbnailId: document.thumbnail?.file_id});
             }
         })
 
@@ -369,7 +377,7 @@ export class App {
             }
             else {
                 var audio = ctx.message.audio;
-                user.loadFile({id: audio.file_id, uniqueId: audio.file_unique_id, size: audio.file_size, name: audio.file_name, title: audio.title, performer: audio.performer, messageId: ctx.message.message_id});
+                user.loadFile({id: audio.file_id, uniqueId: audio.file_unique_id, size: audio.file_size, name: audio.file_name, title: audio.title, performer: audio.performer, messageId: ctx.message.message_id, thumbnailId: audio.thumbnail?.file_id});
             }
         });
 

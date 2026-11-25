@@ -26,8 +26,9 @@ Then you can:
 - Change title, in a batch one after another from the first audio to the last
 - Change the order of a batch
 - Change performer
-- Change poster
-- Format the poster: remove black edges, crop to 1:1 and resize to the Telegram poster size
+- Change poster: send a photo or a YouTube link, audio files keep their embedded cover or Telegram thumbnail
+- Format the poster: remove black edges equally from both sides, fit the whole image into a 320x320 square with black fields
+- Unbatch: set performer and poster for one audio of a batch instead of the whole batch
 - Change duration
 
 Errors are written to `logs\error.log`. The admin can view the last one in the admin panel (`/admin`).
@@ -40,15 +41,6 @@ Some videos need a YouTube login: age restricted ones, and any video when YouTub
 3. Send `/removecookies` to delete them.
 
 The admin can let users without cookies use the admin cookies, always or after a confirmation, in the Settings of the admin panel (`/admin`). It is off by default, the state is saved to `static\settings.json`.
-
-# Proxy
-Some videos are blocked in the country of the server. Add a `proxy` key to `static\config.json` and the bot retries a blocked video through it, for the info and the download. Videos that load directly never use the proxy.
-
-```
-"proxy": "socks5h://127.0.0.1:1080"
-```
-
-Accepted schemes: `http`, `https`, `socks4`, `socks5`, `socks5h`. Setup (`-s`) rewrites `static\config.json`, the old file is kept as `static\config.json.bak`.
 
 # Building
 Requirements:

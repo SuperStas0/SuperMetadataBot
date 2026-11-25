@@ -125,29 +125,6 @@ export class Network {
     }
 
     /**
-     * @param {any} error
-     * @returns {boolean} the video cannot be loaded from this server, which a proxy in another country may fix
-     */
-    static isBlocked(error) {
-        return !this.needsCookies(error) && /video unavailable|not available|in your country|blocked/i.test(error?.message ?? "");
-    }
-
-    /**
-     * @template T
-     * @param {(proxy?: string) => Promise<T>} task runs without the proxy first, then with the config proxy if the video is blocked
-     * @returns {Promise<T>}
-     */
-    static async withProxy(task) {
-        try {
-            return await task();
-        }
-        catch (error) {
-            if (!Files.config.proxy || !this.isBlocked(error)) throw error;
-            return await task(String(Files.config.proxy));
-        }
-    }
-
-    /**
      * @param {string | null} source
      * @param {(cookies?: string) => Promise<any>} task
      */
@@ -169,7 +146,7 @@ export class Network {
      * @param {string | null} [cookies]
      */
     static fetchInfo(url, cookies) {
-        return this.withCookies(cookies, copy => this.withProxy(proxy => this.ytdlp.getInfoAsync(url, {cookies: copy, proxy: proxy})));
+        return this.withCookies(cookies, copy => this.ytdlp.getInfoAsync(url, {cookies: copy}));
     }
 
     /**
@@ -267,10 +244,9 @@ export class Network {
             output: Files.path(path, allowLarge ? "audio.%(ext)s" : "audio-limited.%(ext)s"),
             noPlaylist: true
         }
-        return await this.withCookies(cookies, copy => this.withProxy(async proxy => {
-            signal?.throwIfAborted();
+        return await this.withCookies(cookies, async copy => {
             var warnings = [];
-            var download = this.ytdlp.download(url, {...settings, cookies: copy, proxy: proxy});
+            var download = this.ytdlp.download(url, {...settings, cookies: copy});
             download.on("stderr", text => warnings.push(...text.split(/\r?\n/).filter(line => /^(WARNING|ERROR)/.test(line))));
             if (onProgress) download.on("progress", progress => onProgress(progress.status == "finished" ? 1 : progress.total ? progress.downloaded / progress.total : NaN));
             signal?.addEventListener("abort", () => download.kill(), {once: true});
@@ -281,7 +257,7 @@ export class Network {
                 error.stack += `\n${warnings.slice(-8).join("\n")}`;
                 throw error;
             }
-        }));
+        });
     }
 
     /**
