@@ -27,6 +27,10 @@ A batch with one audio left, for example when the other links failed to load, op
 *Commands*
 /start - basic information
 /search - search YouTube, for example `/search Never gonna give you up`
+/edit - set the performer and the title of the loaded audio at once, for example `/edit Rick Astley - Never Gonna Give You Up`. Only the first `-` splits them, `/edit Title` sets the title and clears the performer
+/title - set the title of the loaded audio, for example `/title Never Gonna Give You Up`
+/performer - set the performer of the loaded audio, for example `/performer Rick Astley`
+/feedback - send a message to the developer, for example `/feedback can you fix this issue: ...`
 /help - this text
 /cookies - how to send cookies and their current status
 /removecookies - delete your saved cookies

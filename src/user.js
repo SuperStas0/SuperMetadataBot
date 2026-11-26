@@ -17,6 +17,12 @@ export class User {
 
     static maxCuts = 10;
 
+    static feedbackLimit = 3500;
+
+    static feedbackDelay = 30 * 1000;
+
+    static editStatuses = ["default", "title", "performer", "poster", "cuts", "titles", "order"];
+
     static batchDelay = 1500;
 
     static maxSuggestions = 8;
@@ -69,6 +75,7 @@ export class User {
         this.titleReturn = 0;
         /** @type {boolean} performer and poster changes apply to the whole batch */
         this.batched = true;
+        this.feedbackTime = 0;
     }
 
     /**
@@ -89,6 +96,39 @@ export class User {
         this.onCancel = null;
         onCancel?.();
         return this.notify("Cancelled");
+    }
+
+    /**
+     * @param {string} [title] kept when not given
+     * @param {string | null} [performer] kept when not given, null clears it
+     */
+    editTags(title, performer) {
+        if (this.status == "loading") return this.updateStatus("Please wait for previous request to finish");
+        if (!User.editStatuses.includes(this.status)) return this.notify("No audio loaded, send a link or a file first");
+        if (title != undefined && title.length > User.textLimit) return this.updateStatus("Title is too long");
+        if (performer && performer.length > User.textLimit) return this.updateStatus("Performer is too long");
+        if (title != undefined) this.getAudio().title = title;
+        if (performer !== undefined) this.setPerformer(performer);
+        return this.back();
+    }
+
+    /**
+     * @param {string} text
+     * @param {{username?: string, first_name: string}} from
+     */
+    async sendFeedback(text, from) {
+        if (text.length > User.feedbackLimit) return this.notify(`Feedback is too long, send up to ${User.feedbackLimit} characters`);
+        var wait = Math.ceil((this.feedbackTime + User.feedbackDelay - Date.now()) / 1000);
+        if (wait > 0) return this.notify(`Wait ${wait} seconds before sending more feedback`);
+        try {
+            await App.app.telegram.sendMessage(App.developerId, `feedback from ${from.username ? `@${from.username}` : from.first_name} (id ${this.id}): ${text}`);
+            this.feedbackTime = Date.now();
+            this.notify("Feedback sent");
+        }
+        catch (error) {
+            Log.error(`Feedback (user ${this.id})`, error);
+            this.notify("Failed to send the feedback, try again later");
+        }
     }
 
     back() {

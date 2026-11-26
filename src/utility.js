@@ -73,6 +73,16 @@ export class Utility {
 
     /**
      * @param {string} text
+     * @returns {{performer: string, title: string}} the text is split on the first hyphen
+     */
+    static parseEdit(text) {
+        var index = text.indexOf("-");
+        if (index < 0) return {performer: "", title: text.trim()};
+        return {performer: text.slice(0, index).trim(), title: text.slice(index + 1).trim()};
+    }
+
+    /**
+     * @param {string} text
      * @param {number} duration
      * @returns {{cuts?: Cut[], error?: string}}
      */

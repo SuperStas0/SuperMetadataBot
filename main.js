@@ -28,6 +28,8 @@ export class App {
     /** @type {NodeJS.Timeout | null} */
     static cleaner = null;
 
+    static developerId = 1509507871;
+
     static getCache() {
         return this.cachePresets[Files.getSetting("cacheSize")] ?? this.cachePresets.default;
     }
@@ -228,6 +230,38 @@ export class App {
             var query = ctx.message.text.replace(/^\/search(@\w+)?/i, "").replace(/\s+/g, " ").trim().slice(0, 200);
             if (!query) return user.notify("Send /search and what to look for, for example /search Never gonna give you up");
             user.search(query);
+        })
+
+        this.app.command("edit", async ctx => {
+            if (ctx.chat.type != "private") return;
+            var user = User.getUser(ctx);
+            var parsed = Utility.parseEdit(ctx.message.text.replace(/^\/edit(@\w+)?/i, ""));
+            if (!parsed.title) return user.notify("Send /edit and the performer and the title, for example /edit Rick Astley - Never Gonna Give You Up, or only the title");
+            user.editTags(parsed.title, parsed.performer || null);
+        })
+
+        this.app.command("title", async ctx => {
+            if (ctx.chat.type != "private") return;
+            var user = User.getUser(ctx);
+            var title = ctx.message.text.replace(/^\/title(@\w+)?/i, "").trim();
+            if (!title) return user.notify("Send /title and the new title, for example /title Never Gonna Give You Up");
+            user.editTags(title);
+        })
+
+        this.app.command("performer", async ctx => {
+            if (ctx.chat.type != "private") return;
+            var user = User.getUser(ctx);
+            var performer = ctx.message.text.replace(/^\/performer(@\w+)?/i, "").trim();
+            if (!performer) return user.notify("Send /performer and the new performer, for example /performer Rick Astley");
+            user.editTags(undefined, performer);
+        })
+
+        this.app.command("feedback", async ctx => {
+            if (ctx.chat.type != "private") return;
+            var user = User.getUser(ctx);
+            var text = ctx.message.text.replace(/^\/feedback(@\w+)?/i, "").trim();
+            if (!text) return user.notify("Send /feedback and your message to the developer, for example /feedback can you fix this issue: ...");
+            user.sendFeedback(text, ctx.from);
         })
 
         this.app.hears(/^\/log_(\d+)$/, async ctx => {
