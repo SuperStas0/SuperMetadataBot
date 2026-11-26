@@ -5,16 +5,16 @@ Send `/search query` or any other text to search YouTube, the admin may turn on 
 Send an audio or a music file to edit it, up to 20 MB. Several files or an album load as a batch. Any format ffmpeg reads works, the result is m4a. Files other than m4a are converted to AAC at the bitrate of the file, 192 kbit/s at most. The title and performer are taken from the file, the poster from its embedded cover or, if it has none, from its Telegram thumbnail.
 Live streams and videos longer than 4 hours are not supported.
 Audio is limited to 50 MB, quality is lowered to fit, videos that still do not fit are declined. The admin can allow larger audio.
-The bot shows progress where possible, /cancel drops a running request.
+The bot shows progress where possible, the Cancel button under the progress message drops a running request.
 
 *Menu*
 *Title* - send the new title, up to 256 characters
 *Performer* - send the new performer, up to 256 characters. _Set default_ restores the YouTube channel name, _Remove_ clears it
 *Cuts* - cut out parts of the audio, in the middle too. Send a range as `start - end`, for example `1:30 - 2:45`, one range per line, timecodes as `seconds`, `MM:SS` or `HH:MM:SS`. Leave a side empty for the edge of the audio: `1:30 -` cuts to the end, `- 2:45` from the start. Up to 10 cuts, overlapping ones are merged. The Cuts menu is a reply to the loaded audio, tap a timecode in it to jump there. _Remove 1_ deletes a single cut, _Clear all_ all of them
 *Suggestions* - the Cuts menu lists sponsor, self promotion, intro, outro and similar segments from SponsorBlock, and silent parts of the audio (below -60 dB for 2 seconds or more), up to 8 in total. _Apply 1_ adds one, _Apply all_ adds all of them. The video id is sent to sponsor.ajay.app when a YouTube audio is loaded.
-*Poster* - send a photo, a YouTube link, or a text to search YouTube, the thumbnail of that video or of the first result becomes the poster. _Set original_ restores the original thumbnail, the YouTube one or the one of the audio file, _Remove_ clears it. New posters are formatted by default: black edges are removed equally from both sides and a square is cut from the center, 320x320 at most, smaller images are not enlarged or padded. _Unformat_ and _Format_ switch it
+*Poster* - send a photo, a YouTube link, or a text to search YouTube, the thumbnail of that video or of the first result becomes the poster. _Set original_ restores the original thumbnail, the YouTube one or the one of the audio file, it is shown only when the audio has one, _Remove_ clears it. New posters are formatted by default: black edges are removed equally from both sides and a square is cut from the center, 320x320 at most, smaller images are not enlarged or padded. _Unformat_ and _Format_ switch it
 *Send* - send the edited audio
-*Back* - go back to the main menu, *Cancel* closes the search results and the playlist confirmation
+*Back* - go back to the main menu, *Cancel* closes the search results, the search confirmation and the playlist confirmation
 The messages you send to change a value are deleted after they are applied.
 
 *Batch*
@@ -30,7 +30,6 @@ A batch with one audio left, for example when the other links failed to load, op
 /help - this text
 /cookies - how to send cookies and their current status
 /removecookies - delete your saved cookies
-/cancel - drop the current action
 /admin - admin only, admin panel
 
 *Cookies*

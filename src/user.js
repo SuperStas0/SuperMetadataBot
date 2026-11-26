@@ -81,23 +81,13 @@ export class User {
         return this.controller.signal;
     }
 
-    cancel() {
-        clearTimeout(this.incomingTimer);
-        var dropped = this.incoming.length > 0;
-        this.incoming = [];
-        if (this.status == "loading" && this.controller) {
-            var onCancel = this.onCancel;
-            this.controller.abort();
-            this.controller = null;
-            this.onCancel = null;
-            onCancel?.();
-            return this.notify("Cancelled");
-        }
-        if (["title", "performer", "poster", "cuts", "titles", "order"].includes(this.status)) return this.back();
-        if (!dropped && !this.askQuery && !this.results && !this.confirm) return this.notify("Nothing to cancel");
-        this.removeAsk();
-        this.removeSearch();
-        this.removeConfirm();
+    stop() {
+        if (this.status != "loading" || !this.controller) return;
+        var onCancel = this.onCancel;
+        this.controller.abort();
+        this.controller = null;
+        this.onCancel = null;
+        onCancel?.();
         return this.notify("Cancelled");
     }
 
@@ -816,7 +806,7 @@ export class User {
                 var poster = audio.posterId ?? {source: audio.posterFile};
                 if (audio.poster == "default") poster = audio.source.posterId ?? {source: Files.path(audio.source.path, "poster.jpg")};
                 if (audio.posterFormatted) poster = {source: await this.getPosterFile()};
-                var markup = Menus.GeneratePoster(audio.poster, audio.posterFormatted, audio.source.uploaded);
+                var markup = Menus.GeneratePoster(audio.poster, audio.posterFormatted, this.hasDefaultPoster());
                 var msg = await App.app.telegram.sendPhoto(this.id, poster, {...markup, caption: menuText});
                 this.menu = msg.message_id;
                 if (audio.poster == "default" && !audio.source.posterId && !audio.posterFormatted) {
@@ -826,12 +816,12 @@ export class User {
             }
             else {
                 try {
-                    await App.app.telegram.editMessageText(this.id, this.menu, null, menuText, Menus.GeneratePoster(null, false, audio.source.uploaded));
+                    await App.app.telegram.editMessageText(this.id, this.menu, null, menuText, Menus.GeneratePoster(null, false, this.hasDefaultPoster()));
                 }
                 catch (error) {
                     if (!error.response?.description?.includes("no text in the message to edit")) Log.error(`Menu ${mode} (user ${this.id})`, error);
                     this.removeMenu();
-                    var msg = await App.app.telegram.sendMessage(this.id, menuText, Menus.GeneratePoster(null, false, audio.source.uploaded));
+                    var msg = await App.app.telegram.sendMessage(this.id, menuText, Menus.GeneratePoster(null, false, this.hasDefaultPoster()));
                     this.menu = msg.message_id;
                 }
             }
@@ -1153,8 +1143,9 @@ export class User {
      * @param {string} message
      */
     updateStatus(message) {
-        if (this.statusMessage) return this.statusMessage.then(msg => App.app.telegram.editMessageText(this.id, msg.message_id, null, message)).catch(() => {});
-        this.statusMessage = App.app.telegram.sendMessage(this.id, message);
+        var extra = this.status == "loading" ? Menus.Stop : {};
+        if (this.statusMessage) return this.statusMessage.then(msg => App.app.telegram.editMessageText(this.id, msg.message_id, null, message, extra)).catch(() => {});
+        this.statusMessage = App.app.telegram.sendMessage(this.id, message, extra);
     }
 
     clearStatus() {

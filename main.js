@@ -218,6 +218,10 @@ export class App {
 
         this.action("searchCancel", user => user.removeSearch());
 
+        this.action("searchAskCancel", user => user.removeAsk());
+
+        this.action("stop", user => user.stop());
+
         this.app.command("search", async ctx => {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
@@ -243,11 +247,6 @@ export class App {
                 Log.error(`Send log entry ${entry.id}`, error);
                 user.notify("Failed to send the audio");
             }
-        })
-
-        this.app.command("cancel", async ctx => {
-            if (ctx.chat.type != "private") return;
-            User.getUser(ctx).cancel();
         })
 
         this.app.command("admin", async ctx => {

@@ -74,19 +74,21 @@ export class Menus {
 
     static DefaultNRemove = this.GenerateMarkup(["Set default", "default", 0], ["Remove", "null", 1], ["Back", "cancel", 2]);
 
-    static SearchAsk = this.GenerateMarkup(["Yes", "searchYes", 0]);
+    static SearchAsk = this.GenerateMarkup(["Yes", "searchYes", 0], ["Cancel", "searchAskCancel", 0]);
+
+    static Stop = this.GeneratePlain(["Cancel", "stop", 0]);
 
     static Confirm = this.GenerateMarkup(["Load all", "playlistLoad", 0], ["Cancel", "playlistCancel", 1]);
 
     /**
      * @param {PosterMode} poster
      * @param {boolean} formatted
-     * @param {boolean} uploaded
+     * @param {boolean} original the audio has an original poster
      */
-    static GeneratePoster(poster, formatted, uploaded) {
+    static GeneratePoster(poster, formatted, original) {
         var buttons = [];
         if (poster) buttons.push([formatted ? "Unformat" : "Format", "format"]);
-        if (poster != "default") buttons.push(["Set original", "default"]);
+        if (poster != "default" && original) buttons.push(["Set original", "default"]);
         if (poster) buttons.push(["Remove", "null"]);
         buttons.push(["Back", "cancel"]);
         return this.GenerateMarkup(...buttons.map(([name, command], row) => [name, command, row]));
