@@ -78,6 +78,8 @@ export class Menus {
 
     static Stop = this.GeneratePlain(["Cancel", "stop", 0]);
 
+    static ReplyCancel = this.GeneratePlain(["Cancel", "replyCancel", 0]);
+
     static Confirm = this.GenerateMarkup(["Load all", "playlistLoad", 0], ["Cancel", "playlistCancel", 1]);
 
     /**

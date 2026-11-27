@@ -21,6 +21,8 @@ export class User {
 
     static feedbackDelay = 30 * 1000;
 
+    static replyLimit = 4000;
+
     static editStatuses = ["default", "title", "performer", "poster", "cuts", "titles", "order"];
 
     static batchDelay = 1500;
@@ -76,6 +78,10 @@ export class User {
         /** @type {boolean} performer and poster changes apply to the whole batch */
         this.batched = true;
         this.feedbackTime = 0;
+        /** @type {number | null} user the next text message is sent to as a reply to the feedback */
+        this.replyTarget = null;
+        /** @type {number | null} */
+        this.replyPrompt = null;
     }
 
     /**
@@ -121,13 +127,47 @@ export class User {
         var wait = Math.ceil((this.feedbackTime + User.feedbackDelay - Date.now()) / 1000);
         if (wait > 0) return this.notify(`Wait ${wait} seconds before sending more feedback`);
         try {
-            await App.app.telegram.sendMessage(App.developerId, `feedback from ${from.username ? `@${from.username}` : from.first_name} (id ${this.id}): ${text}`);
+            await App.app.telegram.sendMessage(App.developerId, `feedback from ${from.username ? `@${from.username}` : from.first_name} (id ${this.id}): ${text}`, Menus.GeneratePlain(["Reply", `reply:${this.id}`, 0]));
             this.feedbackTime = Date.now();
-            this.notify("Feedback sent");
+            App.app.telegram.sendMessage(this.id, `Feedback sent: \`${Utility.escapeCode(text)}\``, Menus.Simple).catch(() => {});
         }
         catch (error) {
             Log.error(`Feedback (user ${this.id})`, error);
             this.notify("Failed to send the feedback, try again later");
+        }
+    }
+
+    /**
+     * @param {number} target
+     * @param {string} name
+     */
+    async startReply(target, name) {
+        this.stopReply();
+        this.replyTarget = target;
+        var message = await App.app.telegram.sendMessage(this.id, `Reply to ${name}, send the text`, Menus.ReplyCancel).catch(() => null);
+        this.replyPrompt = message?.message_id ?? null;
+    }
+
+    stopReply() {
+        if (this.replyPrompt) App.app.telegram.deleteMessage(this.id, this.replyPrompt).catch(() => {});
+        this.replyTarget = null;
+        this.replyPrompt = null;
+    }
+
+    /**
+     * @param {string} text
+     */
+    async sendReply(text) {
+        if (text.length > User.replyLimit) return this.notify(`Reply is too long, send up to ${User.replyLimit} characters`);
+        var target = this.replyTarget;
+        this.stopReply();
+        try {
+            await App.app.telegram.sendMessage(target, `Reply from the developer: ${text}`);
+            this.notify("Reply sent");
+        }
+        catch (error) {
+            Log.error(`Reply (user ${target})`, error);
+            this.notify("Failed to send the reply, the user may have blocked the bot");
         }
     }
 

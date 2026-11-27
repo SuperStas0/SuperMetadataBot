@@ -31,7 +31,7 @@ Then you can:
 - Format the poster: remove black edges equally from both sides, cut a square from the center, scaled down to 320x320 at most, smaller images are not enlarged or padded, every new poster is formatted by default and Unformat restores the original
 - Unbatch: set performer and poster for one audio of a batch instead of the whole batch
 - Change duration
-- Send a message to the developer: `/feedback text`
+- Send a message to the developer: `/feedback text`, the developer answers with the Reply button under it
 
 Errors are written to `logs\error.log`. The admin can view the last one in the admin panel (`/admin`).
 

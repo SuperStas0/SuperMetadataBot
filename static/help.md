@@ -27,7 +27,7 @@ A batch with one audio left, for example after failed links, opens as a single a
 /edit - set performer and title, `/edit Rick Astley - Never Gonna Give You Up`. Only the first `-` splits them, `/edit Title` clears the performer
 /title - set the title, `/title Never Gonna Give You Up`
 /performer - set the performer, `/performer Rick Astley`
-/feedback - message the developer, `/feedback can you fix this issue: ...`
+/feedback - message the developer, `/feedback can you fix this issue: ...`, the reply comes in this chat
 /help - this text
 /cookies - how to send cookies and their status
 /removecookies - delete your saved cookies

@@ -224,6 +224,14 @@ export class App {
 
         this.action("stop", user => user.stop());
 
+        this.action(/^reply:(\d+)$/, (user, ctx) => {
+            if (ctx.from.id != this.developerId) return;
+            var name = ctx.callbackQuery.message?.text?.match(/^feedback from (.+?) \(id \d+\)/)?.[1] ?? `user ${ctx.match[1]}`;
+            user.startReply(Number(ctx.match[1]), name);
+        });
+
+        this.action("replyCancel", user => user.stopReply());
+
         this.app.command("search", async ctx => {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
@@ -321,6 +329,11 @@ export class App {
         this.app.on(filters.message("text"), async ctx => {
             if (ctx.chat.type != "private") return;
             var user = User.getUser(ctx);
+
+            if (user.replyTarget && !ctx.message.text.startsWith("/")) {
+                user.sendReply(ctx.message.text);
+                return;
+            }
 
             if (Panel.listing && user.isAdmin() && (user.status == "none" || user.status == "default")) {
                 if (!ctx.message.text.startsWith("/")) Panel.setFilter(ctx, ctx.message.text);
